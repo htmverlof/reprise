@@ -71,7 +71,7 @@ struct SettingsView: View {
                             Image(systemName: tab.icon)
                                 .font(.system(size: 15))
                             Text(tab.rawValue)
-                                .font(.caption2)
+                                .font(.caption)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
@@ -115,15 +115,19 @@ struct SettingsView: View {
             }
             .padding(20)
         }
-        .frame(width: 420)
-        .frame(maxHeight: 640)
+        .frame(width: 460)
+        // Was a flat 640 regardless of which tab was showing, so a short tab (e.g.
+        // Notifications, especially after the htm-rooster cleanup made it shorter still)
+        // left a large dead gap above Close/Save. Each tab has its own ScrollView, so this
+        // is just a comfortable cap, not something content depends on to stay visible.
+        .frame(maxHeight: 480)
     }
 
     private var generalTab: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Menu bar icon")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.subheadline).foregroundStyle(.secondary)
                 HStack(spacing: 16) {
                     iconLegendItem(color: .red, label: "Problem")
                     iconLegendItem(color: .blue, label: "Downloading")
@@ -137,10 +141,10 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Download location")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.subheadline).foregroundStyle(.secondary)
                 HStack {
                     Text(customDownloadPath.isEmpty ? "Default: ~/Downloads/Reprise" : customDownloadPath)
-                        .font(.system(size: 11))
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.head)
@@ -158,7 +162,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Start checking (minutes before scheduled time)")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.subheadline).foregroundStyle(.secondary)
                 Stepper(value: $checkLeadMinutes, in: 1...120, step: 1) {
                     Text("\(Int(checkLeadMinutes)) minutes")
                 }
@@ -166,7 +170,7 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Check interval while waiting for VOD (minutes)")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.subheadline).foregroundStyle(.secondary)
                 Stepper(value: $vodWaitMinutes, in: 0.5...30, step: 0.5) {
                     Text("every \(vodWaitMinutes.formatted()) minutes")
                 }
@@ -174,7 +178,7 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Minimum time between failure notifications (minutes)")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.subheadline).foregroundStyle(.secondary)
                 Stepper(value: $failureCooldownMinutes, in: 1...60, step: 1) {
                     Text("\(Int(failureCooldownMinutes)) minutes")
                 }
@@ -182,7 +186,7 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Warn when free disk space drops below (GB)")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.subheadline).foregroundStyle(.secondary)
                 Stepper(value: $lowDiskThresholdGB, in: 1...100, step: 1) {
                     Text("\(Int(lowDiskThresholdGB)) GB")
                 }
@@ -194,7 +198,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Read YouTube login cookies from")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.subheadline).foregroundStyle(.secondary)
                 Picker("", selection: $cookieBrowserPreference) {
                     Text("Automatic (Chrome, then Safari)").tag("auto")
                     Text("Chrome").tag("chrome")
@@ -204,13 +208,13 @@ struct SettingsView: View {
                 .pickerStyle(.menu)
                 Text("Only matters if you have both installed but are only logged into "
                     + "YouTube in one of them — Automatic always prefers Chrome.")
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Diagnostics")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.subheadline).foregroundStyle(.secondary)
                 HStack(spacing: 10) {
                     Button {
                         Task { await testCookies() }
@@ -231,7 +235,7 @@ struct SettingsView: View {
                 }
                 if let cookieTestResult {
                     Text(cookieTestResult)
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(cookieTestSucceeded ? .green : .orange)
                 }
             }
@@ -242,24 +246,24 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Pushover credentials")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.subheadline).foregroundStyle(.secondary)
                 Text("Optional — lets Reprise send you a push notification (premiere went live, "
                     + "download finished or failed, pre-flight check results) even when you're "
                     + "away from this Mac. Local banners on this Mac work either way, no setup "
                     + "needed. To enable push: create a free account at pushover.net, add an "
                     + "Application there (any name), then paste its Application Token and your "
                     + "account's User Key below.")
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Application token").font(.caption2).foregroundStyle(.secondary)
+                    Text("Application token").font(.caption).foregroundStyle(.secondary)
                     credentialField("Application token", text: $pushoverToken, revealed: $showPushoverToken)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("User key").font(.caption2).foregroundStyle(.secondary)
+                    Text("User key").font(.caption).foregroundStyle(.secondary)
                     credentialField("User key", text: $pushoverUserKey, revealed: $showPushoverUserKey)
                 }
             }
@@ -277,7 +281,7 @@ struct SettingsView: View {
                 .disabled(isTestingNotification)
                 if let notificationTestResult {
                     Text(notificationTestResult)
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(notificationTestSucceeded ? .green : .orange)
                 }
             }
@@ -288,7 +292,7 @@ struct SettingsView: View {
     private func iconLegendItem(color: Color, label: String) -> some View {
         HStack(spacing: 4) {
             Circle().fill(color).frame(width: 8, height: 8)
-            Text(label).font(.caption2).foregroundStyle(.secondary)
+            Text(label).font(.caption).foregroundStyle(.secondary)
         }
     }
 

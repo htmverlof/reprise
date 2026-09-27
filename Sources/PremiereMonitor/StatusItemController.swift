@@ -305,7 +305,7 @@ final class StatusItemController: NSObject {
         closeStrayWindows()
         if settingsWindow == nil {
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 420, height: 640),
+                contentRect: NSRect(x: 0, y: 0, width: 460, height: 480),
                 styleMask: [.titled, .closable, .resizable],
                 backing: .buffered,
                 defer: false
