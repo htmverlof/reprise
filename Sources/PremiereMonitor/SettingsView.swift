@@ -54,7 +54,7 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             Text("Settings")
-                .font(.headline)
+                .font(.system(size: 17, weight: .semibold))
                 .padding(.top, 16)
 
             // A hand-rolled tab strip instead of SwiftUI's TabView: on macOS 26, TabView
@@ -71,7 +71,7 @@ struct SettingsView: View {
                             Image(systemName: tab.icon)
                                 .font(.system(size: 15))
                             Text(tab.rawValue)
-                                .font(.caption)
+                                .font(.system(size: 12))
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
@@ -127,7 +127,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Menu bar icon")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
                 HStack(spacing: 16) {
                     iconLegendItem(color: .red, label: "Problem")
                     iconLegendItem(color: .blue, label: "Downloading")
@@ -141,7 +141,7 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Download location")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
                 HStack {
                     Text(customDownloadPath.isEmpty ? "Default: ~/Downloads/Reprise" : customDownloadPath)
                         .font(.system(size: 12))
@@ -162,7 +162,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Start checking (minutes before scheduled time)")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
                 Stepper(value: $checkLeadMinutes, in: 1...120, step: 1) {
                     Text("\(Int(checkLeadMinutes)) minutes")
                 }
@@ -170,7 +170,7 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Check interval while waiting for VOD (minutes)")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
                 Stepper(value: $vodWaitMinutes, in: 0.5...30, step: 0.5) {
                     Text("every \(vodWaitMinutes.formatted()) minutes")
                 }
@@ -178,7 +178,7 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Minimum time between failure notifications (minutes)")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
                 Stepper(value: $failureCooldownMinutes, in: 1...60, step: 1) {
                     Text("\(Int(failureCooldownMinutes)) minutes")
                 }
@@ -186,7 +186,7 @@ struct SettingsView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Warn when free disk space drops below (GB)")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
                 Stepper(value: $lowDiskThresholdGB, in: 1...100, step: 1) {
                     Text("\(Int(lowDiskThresholdGB)) GB")
                 }
@@ -198,7 +198,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Read YouTube login cookies from")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
                 Picker("", selection: $cookieBrowserPreference) {
                     Text("Automatic (Chrome, then Safari)").tag("auto")
                     Text("Chrome").tag("chrome")
@@ -208,13 +208,13 @@ struct SettingsView: View {
                 .pickerStyle(.menu)
                 Text("Only matters if you have both installed but are only logged into "
                     + "YouTube in one of them — Automatic always prefers Chrome.")
-                    .font(.caption)
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Diagnostics")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
                 HStack(spacing: 10) {
                     Button {
                         Task { await testCookies() }
@@ -235,7 +235,7 @@ struct SettingsView: View {
                 }
                 if let cookieTestResult {
                     Text(cookieTestResult)
-                        .font(.caption)
+                        .font(.system(size: 12))
                         .foregroundStyle(cookieTestSucceeded ? .green : .orange)
                 }
             }
@@ -246,24 +246,24 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Pushover credentials")
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
                 Text("Optional — lets Reprise send you a push notification (premiere went live, "
                     + "download finished or failed, pre-flight check results) even when you're "
                     + "away from this Mac. Local banners on this Mac work either way, no setup "
                     + "needed. To enable push: create a free account at pushover.net, add an "
                     + "Application there (any name), then paste its Application Token and your "
                     + "account's User Key below.")
-                    .font(.caption)
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Application token").font(.caption).foregroundStyle(.secondary)
+                    Text("Application token").font(.system(size: 12)).foregroundStyle(.secondary)
                     credentialField("Application token", text: $pushoverToken, revealed: $showPushoverToken)
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("User key").font(.caption).foregroundStyle(.secondary)
+                    Text("User key").font(.system(size: 12)).foregroundStyle(.secondary)
                     credentialField("User key", text: $pushoverUserKey, revealed: $showPushoverUserKey)
                 }
             }
@@ -281,7 +281,7 @@ struct SettingsView: View {
                 .disabled(isTestingNotification)
                 if let notificationTestResult {
                     Text(notificationTestResult)
-                        .font(.caption)
+                        .font(.system(size: 12))
                         .foregroundStyle(notificationTestSucceeded ? .green : .orange)
                 }
             }
@@ -292,7 +292,7 @@ struct SettingsView: View {
     private func iconLegendItem(color: Color, label: String) -> some View {
         HStack(spacing: 4) {
             Circle().fill(color).frame(width: 8, height: 8)
-            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text(label).font(.system(size: 12)).foregroundStyle(.secondary)
         }
     }
 
