@@ -1485,6 +1485,101 @@ final class MonitorEngine: ObservableObject {
         return false
     }
 
+    /// Downloads the available update's release zip, unpacks it, and swaps it in for the
+    /// currently-running app — then quits so the swap can happen safely (macOS doesn't
+    /// lock a running executable's file, but replacing it out from under yourself while
+    /// still executing is fragile; letting a detached script do it after this process is
+    /// gone is the standard approach, same idea Sparkle and other updaters use).
+    ///
+    /// The old app bundle is renamed aside (Reprise.app.backup-<timestamp>), not deleted —
+    /// same "never destroy without a way back" pattern install.sh already uses for the
+    /// executable. Relaunches via `launchctl kickstart` on the LaunchAgent, not a plain
+    /// `open`, so the auto-restart-on-crash supervision (KeepAlive) stays attached to the
+    /// new process instead of silently going stale until the next login.
+    func downloadAndInstallUpdate() async -> (ok: Bool, message: String) {
+        guard let tag = updateAvailable else {
+            return (false, "No update available.")
+        }
+        guard let url = URL(string: "https://github.com/htmverlof/reprise/releases/download/\(tag)/Reprise.zip") else {
+            return (false, "Invalid update URL.")
+        }
+
+        log("Downloading Reprise \(tag)...")
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("RepriseUpdate-\(UUID().uuidString)")
+        do {
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        } catch {
+            return (false, "Could not create a temp folder: \(error.localizedDescription)")
+        }
+        let zipPath = tempDir.appendingPathComponent("Reprise.zip")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+                return (false, "Download failed: unexpected server response.")
+            }
+            try data.write(to: zipPath)
+        } catch {
+            return (false, "Download failed: \(error.localizedDescription)")
+        }
+
+        // ditto (not /usr/bin/unzip): the release zip was itself made with ditto, which
+        // preserves the code signature and extended attributes an app bundle needs —
+        // plain unzip can silently mangle those.
+        let unzipDir = tempDir.appendingPathComponent("unzipped")
+        let ditto = Process()
+        ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        ditto.arguments = ["-x", "-k", zipPath.path, unzipDir.path]
+        do {
+            try ditto.run()
+            ditto.waitUntilExit()
+            guard ditto.terminationStatus == 0 else {
+                return (false, "Could not unpack the downloaded update.")
+            }
+        } catch {
+            return (false, "Could not unpack the downloaded update: \(error.localizedDescription)")
+        }
+
+        let newAppPath = unzipDir.appendingPathComponent("Reprise.app")
+        guard FileManager.default.fileExists(atPath: newAppPath.path) else {
+            return (false, "The downloaded update didn't contain Reprise.app.")
+        }
+
+        let scriptPath = tempDir.appendingPathComponent("apply_update.sh")
+        let script = """
+            #!/bin/bash
+            sleep 1
+            TS=$(date +%Y%m%d-%H%M%S)
+            if [ -d "/Applications/Reprise.app" ]; then
+                mv "/Applications/Reprise.app" "/Applications/Reprise.app.backup-$TS"
+            fi
+            mv "\(newAppPath.path)" "/Applications/Reprise.app"
+            launchctl kickstart -k "gui/$(id -u)/com.media.reprise" 2>/dev/null || open -a "/Applications/Reprise.app"
+            rm -rf "\(tempDir.path)"
+            """
+        do {
+            try script.write(to: scriptPath, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath.path)
+        } catch {
+            return (false, "Could not prepare the update script: \(error.localizedDescription)")
+        }
+
+        let launcher = Process()
+        launcher.executableURL = URL(fileURLWithPath: "/bin/bash")
+        launcher.arguments = [scriptPath.path]
+        do {
+            try launcher.run()
+        } catch {
+            return (false, "Could not start the update script: \(error.localizedDescription)")
+        }
+
+        log("Update \(tag) downloaded — quitting to install and relaunch...")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            NSApp.terminate(nil)
+        }
+        return (true, "Installing \(tag) — Reprise will quit and reopen automatically.")
+    }
+
     private func tick() async {
         // Vóór de guard: deze mag ook draaien als er (nog) geen video's
         // gevolgd worden. checkYtDlpVersion() remt zichzelf af tot 1x/dag.

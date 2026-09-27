@@ -42,6 +42,8 @@ struct SettingsView: View {
 
     @State private var isCheckingUpdate = false
     @State private var updateCheckResult: String?
+    @State private var isInstallingUpdate = false
+    @State private var installResult: String?
     @State private var logCopied = false
 
     init() {
@@ -300,9 +302,28 @@ struct SettingsView: View {
                     Text("⬆️ \(updateAvailable) is available")
                         .font(.system(size: 12))
                         .foregroundStyle(.orange)
-                    Link("Download \(updateAvailable) from GitHub",
-                         destination: URL(string: "https://github.com/htmverlof/reprise/releases/tag/\(updateAvailable)")!)
-                        .font(.system(size: 12))
+                    HStack(spacing: 10) {
+                        Button {
+                            confirmInstallUpdate(version: updateAvailable)
+                        } label: {
+                            if isInstallingUpdate {
+                                ProgressView().controlSize(.small).frame(width: 14, height: 14)
+                            } else {
+                                Label("Download & Install", systemImage: "arrow.down.circle")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isInstallingUpdate)
+
+                        Link("Release notes",
+                             destination: URL(string: "https://github.com/htmverlof/reprise/releases/tag/\(updateAvailable)")!)
+                            .font(.system(size: 12))
+                    }
+                    if let installResult {
+                        Text(installResult)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
                 } else {
                     Text("You're on the latest known version.")
                         .font(.system(size: 12))
@@ -426,6 +447,30 @@ struct SettingsView: View {
             updateCheckResult = "\(updateAvailable) is available."
         } else {
             updateCheckResult = "You're on the latest version (\(engine.currentVersion))."
+        }
+    }
+
+    private func confirmInstallUpdate(version: String) {
+        let alert = NSAlert()
+        alert.messageText = "Update to \(version)?"
+        alert.informativeText = "Reprise will download the update, quit, and reopen automatically with the "
+            + "new version. Tracked premieres and settings aren't affected."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Update")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        isInstallingUpdate = true
+        installResult = nil
+        Task {
+            let (ok, message) = await engine.downloadAndInstallUpdate()
+            // Only reachable on failure — a successful install quits the app before this
+            // line would run, so seeing this means it's safe to let the user try again.
+            isInstallingUpdate = false
+            installResult = message
+            if !ok {
+                engine.log("⚠️ Update install failed: \(message)")
+            }
         }
     }
 
