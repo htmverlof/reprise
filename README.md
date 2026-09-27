@@ -15,9 +15,21 @@ green = idle and healthy — right-click the icon for a quick status menu).
   ```
   brew install yt-dlp ffmpeg
   ```
-- Xcode Command Line Tools (`xcode-select --install`) — needed to build from source
+- Xcode Command Line Tools (`xcode-select --install`) — only needed if building from
+  source (see below); the pre-built release doesn't need this
 
-## Build and install
+## Quickest: download the pre-built app
+
+No building required — grab the latest `.zip` from
+[Releases](https://github.com/htmverlof/reprise/releases), unzip, drag `Reprise.app` into
+`/Applications`, then **right-click → Open** the first time (Gatekeeper will warn about an
+app from an unidentified developer — expected, not a bug; a plain double-click refuses to
+open it, right-click → Open shows an "Open anyway" option a double-click doesn't).
+
+Still need `yt-dlp` and `ffmpeg` installed via Homebrew either way (see Requirements
+above) — those aren't bundled into the app.
+
+## Build and install from source
 
 On a fresh Mac, starting from nothing:
 
