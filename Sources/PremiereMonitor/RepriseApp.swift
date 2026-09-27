@@ -62,5 +62,17 @@ struct RepriseApp: App {
         Settings {
             EmptyView()
         }
+        .commands {
+            // Without this, the standard app-menu "Settings…" item (and its Cmd+,
+            // shortcut) opens the EmptyView() placeholder scene above instead of the
+            // real settings window StatusItemController manages — a blank window with
+            // no content. Redirects it to the same window the gear-icon button opens.
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") {
+                    StatusItemController.shared?.showSettingsWindow()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
+        }
     }
 }
