@@ -93,6 +93,10 @@ struct SettingsView: View {
                         .background(selectedTab == tab ? Color.accentColor.opacity(0.15) : Color.clear)
                         .foregroundStyle(selectedTab == tab ? Color.accentColor : Color.primary)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
+                        // Without this, .buttonStyle(.plain) only makes the icon/text glyphs
+                        // themselves clickable, not the padded/colored area around them —
+                        // exactly the "have to click precisely on the icon" symptom.
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
