@@ -53,6 +53,35 @@ struct SettingsView: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            // Settings has grown past a single fixed window height (menu bar legend, disk
+            // threshold, Dock toggle, cookie browser picker, ...) — without a ScrollView the
+            // Save button just sits off the bottom of the window, unreachable. Close/Save
+            // stay outside the ScrollView so they're always visible regardless of scroll
+            // position.
+            ScrollView {
+                settingsContent
+                    .padding(20)
+            }
+            Divider()
+            HStack {
+                Spacer()
+                Button("Close") {
+                    StatusItemController.shared?.closeSettingsWindow()
+                }
+                Button("Save") {
+                    save()
+                    StatusItemController.shared?.closeSettingsWindow()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+            .padding(20)
+        }
+        .frame(width: 420)
+        .frame(maxHeight: 640)
+    }
+
+    private var settingsContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             Text("Settings")
                 .font(.headline)
@@ -224,23 +253,7 @@ struct SettingsView: View {
                         .foregroundStyle(cookieTestSucceeded ? .green : .orange)
                 }
             }
-
-            Divider()
-
-            HStack {
-                Spacer()
-                Button("Close") {
-                    StatusItemController.shared?.closeSettingsWindow()
-                }
-                Button("Save") {
-                    save()
-                    StatusItemController.shared?.closeSettingsWindow()
-                }
-                .keyboardShortcut(.defaultAction)
-            }
         }
-        .padding(20)
-        .frame(width: 420)
     }
 
     @ViewBuilder
@@ -302,6 +315,10 @@ struct SettingsView: View {
     private func testCookies() async {
         isTestingCookies = true
         cookieTestResult = nil
+        // Apply the picker's current value before testing, not just on Save — otherwise
+        // picking Safari and immediately hitting Test still tests against whatever browser
+        // was saved before, which looks like the picker did nothing.
+        engine.settings.cookieBrowserPreference = cookieBrowserPreference
         let (ok, message) = await engine.testCookies()
         isTestingCookies = false
         cookieTestSucceeded = ok
