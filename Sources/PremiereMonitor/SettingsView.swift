@@ -54,15 +54,26 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Settings has grown past a single fixed window height (menu bar legend, disk
-            // threshold, Dock toggle, cookie browser picker, ...) — without a ScrollView the
-            // Save button just sits off the bottom of the window, unreachable. Close/Save
-            // stay outside the ScrollView so they're always visible regardless of scroll
-            // position.
-            ScrollView {
-                settingsContent
-                    .padding(20)
+            Text("Settings")
+                .font(.headline)
+                .padding(.top, 16)
+
+            // Split into tabs rather than one long scrolling form — grew too tall for a
+            // single fixed-size pane once the menu bar legend, disk threshold, Dock toggle,
+            // and cookie browser picker all landed on top of the original handful of
+            // settings. Each tab still gets its own ScrollView as a safety net in case a
+            // future addition makes any one tab too tall on its own.
+            TabView {
+                ScrollView { generalTab.padding(20) }
+                    .tabItem { Label("General", systemImage: "gearshape") }
+                ScrollView { monitoringTab.padding(20) }
+                    .tabItem { Label("Monitoring", systemImage: "clock") }
+                ScrollView { cookiesTab.padding(20) }
+                    .tabItem { Label("Cookies", systemImage: "globe") }
+                ScrollView { notificationsTab.padding(20) }
+                    .tabItem { Label("Notifications", systemImage: "bell") }
             }
+
             Divider()
             HStack {
                 Spacer()
@@ -81,11 +92,8 @@ struct SettingsView: View {
         .frame(maxHeight: 640)
     }
 
-    private var settingsContent: some View {
+    private var generalTab: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Settings")
-                .font(.headline)
-
             VStack(alignment: .leading, spacing: 6) {
                 Text("Menu bar icon")
                     .font(.caption).foregroundStyle(.secondary)
@@ -96,8 +104,31 @@ struct SettingsView: View {
                 }
             }
 
-            Divider()
+            Toggle("Show icon in Dock", isOn: $showDockIcon)
+                .help("Off (default): menu bar only, no Dock icon. On: also keeps a permanent Dock icon, "
+                    + "not just while a window happens to be open.")
 
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Download location")
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    Text(customDownloadPath.isEmpty ? "Default: ~/Downloads/Reprise" : customDownloadPath)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                    Spacer()
+                    Button("Choose…") { chooseFolder() }
+                    if !customDownloadPath.isEmpty {
+                        Button("Default") { customDownloadPath = "" }
+                    }
+                }
+            }
+        }
+    }
+
+    private var monitoringTab: some View {
+        VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Start checking (minutes before scheduled time)")
                     .font(.caption).foregroundStyle(.secondary)
@@ -129,11 +160,11 @@ struct SettingsView: View {
                     Text("\(Int(lowDiskThresholdGB)) GB")
                 }
             }
+        }
+    }
 
-            Toggle("Show icon in Dock", isOn: $showDockIcon)
-                .help("Off (default): menu bar only, no Dock icon. On: also keeps a permanent Dock icon, "
-                    + "not just while a window happens to be open.")
-
+    private var cookiesTab: some View {
+        VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Read YouTube login cookies from")
                     .font(.caption).foregroundStyle(.secondary)
@@ -151,24 +182,37 @@ struct SettingsView: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Download location")
+                Text("Diagnostics")
                     .font(.caption).foregroundStyle(.secondary)
-                HStack {
-                    Text(customDownloadPath.isEmpty ? "Default: ~/Downloads/Reprise" : customDownloadPath)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.head)
-                    Spacer()
-                    Button("Choose…") { chooseFolder() }
-                    if !customDownloadPath.isEmpty {
-                        Button("Default") { customDownloadPath = "" }
+                HStack(spacing: 10) {
+                    Button {
+                        Task { await testCookies() }
+                    } label: {
+                        if isTestingCookies {
+                            ProgressView().controlSize(.small).frame(width: 14, height: 14)
+                        } else {
+                            Text("Test YouTube login")
+                        }
                     }
+                    .disabled(isTestingCookies)
+
+                    Button("Log in to YouTube again") {
+                        engine.openYouTubeLogin()
+                    }
+                    .help("Opens YouTube in your cookie browser. Log in there, then run the "
+                          + "test again.")
+                }
+                if let cookieTestResult {
+                    Text(cookieTestResult)
+                        .font(.caption2)
+                        .foregroundStyle(cookieTestSucceeded ? .green : .orange)
                 }
             }
+        }
+    }
 
-            Divider()
-
+    private var notificationsTab: some View {
+        VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text("Pushover credentials")
@@ -208,49 +252,21 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Divider()
-
             VStack(alignment: .leading, spacing: 6) {
-                Text("Diagnostics")
-                    .font(.caption).foregroundStyle(.secondary)
-                HStack(spacing: 10) {
-                    Button {
-                        testNotification()
-                    } label: {
-                        if isTestingNotification {
-                            ProgressView().controlSize(.small).frame(width: 14, height: 14)
-                        } else {
-                            Text("Send test notification")
-                        }
+                Button {
+                    testNotification()
+                } label: {
+                    if isTestingNotification {
+                        ProgressView().controlSize(.small).frame(width: 14, height: 14)
+                    } else {
+                        Text("Send test notification")
                     }
-                    .disabled(isTestingNotification)
-
-                    Button {
-                        Task { await testCookies() }
-                    } label: {
-                        if isTestingCookies {
-                            ProgressView().controlSize(.small).frame(width: 14, height: 14)
-                        } else {
-                            Text("Test YouTube login")
-                        }
-                    }
-                    .disabled(isTestingCookies)
-
-                    Button("Log in to YouTube again") {
-                        engine.openYouTubeLogin()
-                    }
-                    .help("Opens YouTube in Chrome. yt-dlp reads cookies from Chrome, "
-                          + "so you need to log in there. Run the test again afterwards.")
                 }
+                .disabled(isTestingNotification)
                 if let notificationTestResult {
                     Text(notificationTestResult)
                         .font(.caption2)
                         .foregroundStyle(notificationTestSucceeded ? .green : .orange)
-                }
-                if let cookieTestResult {
-                    Text(cookieTestResult)
-                        .font(.caption2)
-                        .foregroundStyle(cookieTestSucceeded ? .green : .orange)
                 }
             }
         }
