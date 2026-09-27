@@ -106,12 +106,8 @@ struct AppSettings: Codable, Equatable {
     var failureCooldownMinutes: Double = 5
     /// Custom download location; nil = default ~/Downloads/Reprise.
     var customDownloadPath: String? = nil
-    /// Pushover credentials, set from within the app's own Settings screen.
-    /// nil/empty = fall back to the shared ~/htm-rooster/script/config.env
-    /// file (the setup this app originally borrowed its keys from). Once you
-    /// set your own here — e.g. after making a new Pushover account — these
-    /// take over completely; you're not editing a file shared with an
-    /// unrelated project anymore.
+    /// Pushover credentials, set from within the app's own Settings screen. nil/empty =
+    /// push notifications are off; local macOS banners still work regardless.
     var pushoverToken: String? = nil
     var pushoverUserKey: String? = nil
     /// Below this, the disk-space banner/push fires. nil = the 5GB default.

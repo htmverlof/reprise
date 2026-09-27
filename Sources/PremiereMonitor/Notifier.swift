@@ -1,56 +1,26 @@
 import Foundation
 
 enum Notifier {
-    private static let envFile = ("~/htm-rooster/script/config.env" as NSString).expandingTildeInPath
-
-    // Deliberately not cached: this used to cache forever after the first read, so rotating
-    // the shared PUSHOVER_TOKEN in that file while Reprise was already running had no effect
-    // until Reprise was restarted, with no indication why pushes had started failing. The file
-    // is tiny and this is only read when actually sending a notification (at most a handful
-    // of times an hour), so re-reading every time costs nothing worth caching for.
-    private static func loadEnv() -> [String: String] {
-        var result: [String: String] = [:]
-        if let contents = try? String(contentsOfFile: envFile, encoding: .utf8) {
-            for rawLine in contents.split(separator: "\n") {
-                let line = rawLine.trimmingCharacters(in: .whitespaces)
-                guard !line.isEmpty, !line.hasPrefix("#"), let eq = line.firstIndex(of: "=") else { continue }
-                let key = String(line[line.startIndex..<eq]).trimmingCharacters(in: .whitespaces)
-                var value = String(line[line.index(after: eq)...]).trimmingCharacters(in: .whitespaces)
-                if value.hasPrefix("\"") && value.hasSuffix("\"") && value.count >= 2 {
-                    value = String(value.dropFirst().dropLast())
-                }
-                result[key] = value
-            }
-        }
-        return result
-    }
-
-    /// The credentials that are actually in effect right now: your own, if set
-    /// in Settings, otherwise whatever the shared env file resolves to. Used
-    /// both to send notifications and to pre-fill the Settings screen so you
-    /// can see what's active before you decide to override it.
+    /// The credentials currently set in Settings. A thin wrapper (rather than reading
+    /// `override` directly at each call site) so there's one place to extend this later —
+    /// kept trivial on purpose: this used to also fall back to a personal, machine-specific
+    /// shared config file, which made no sense once Reprise became something other people
+    /// could download too (they'd never have that file, and "Shared (unknown-name)" showing
+    /// up in Settings for a brand-new install was just confusing).
     static func activeCredentials(override: (token: String?, userKey: String?)) -> (token: String?, userKey: String?) {
-        let ownToken = override.token?.trimmingCharacters(in: .whitespaces)
-        let ownUser = override.userKey?.trimmingCharacters(in: .whitespaces)
-        if let ownToken, !ownToken.isEmpty, let ownUser, !ownUser.isEmpty {
-            return (ownToken, ownUser)
-        }
-        let env = loadEnv()
-        return (env["PUSHOVER_TOKEN"], env["PUSHOVER_USER_ANDRE"])
+        let token = override.token?.trimmingCharacters(in: .whitespaces)
+        let userKey = override.userKey?.trimmingCharacters(in: .whitespaces)
+        return (token?.isEmpty == false ? token : nil, userKey?.isEmpty == false ? userKey : nil)
     }
 
-    /// Sends a Pushover notification. `override` is the app's own Settings
-    /// value; if either half is empty this falls back to the shared env file
-    /// that Reprise originally borrowed its keys from (~/htm-rooster/script/
-    /// config.env). Fails silently (with a callback for logging) if neither
-    /// source has usable credentials.
+    /// Sends a Pushover notification using the credentials set in Settings. Fails silently
+    /// (with a callback for logging) if none are set.
     static func send(title: String, message: String,
                      override: (token: String?, userKey: String?) = (nil, nil),
                      onResult: @escaping (Bool, String) -> Void) {
         let (token, user) = activeCredentials(override: override)
-        guard let token, !token.isEmpty, let user, !user.isEmpty else {
-            onResult(false, "No Pushover credentials — set them in Reprise's Settings, "
-                          + "or check \(envFile)")
+        guard let token, let user else {
+            onResult(false, "No Pushover credentials set — add them in Reprise's Settings → Notifications.")
             return
         }
 

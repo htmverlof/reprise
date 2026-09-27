@@ -13,7 +13,6 @@ struct SettingsView: View {
     @State private var cookieBrowserPreference: String
     @State private var pushoverToken: String
     @State private var pushoverUserKey: String
-    @State private var usingSharedPushoverConfig: Bool
     @State private var showPushoverToken = false
     @State private var showPushoverUserKey = false
 
@@ -48,22 +47,8 @@ struct SettingsView: View {
         _lowDiskThresholdGB = State(initialValue: s.lowDiskThresholdGB ?? 5)
         _showDockIcon = State(initialValue: s.showDockIcon ?? false)
         _cookieBrowserPreference = State(initialValue: s.cookieBrowserPreference ?? "auto")
-
-        let hasOwnCredentials = !(s.pushoverToken ?? "").trimmingCharacters(in: .whitespaces).isEmpty
-            && !(s.pushoverUserKey ?? "").trimmingCharacters(in: .whitespaces).isEmpty
-        if hasOwnCredentials {
-            _pushoverToken = State(initialValue: s.pushoverToken ?? "")
-            _pushoverUserKey = State(initialValue: s.pushoverUserKey ?? "")
-            _usingSharedPushoverConfig = State(initialValue: false)
-        } else {
-            // Show what's actually active right now (from the shared config
-            // file) so you're not staring at blank fields wondering why
-            // notifications work at all.
-            let active = Notifier.activeCredentials(override: (nil, nil))
-            _pushoverToken = State(initialValue: active.token ?? "")
-            _pushoverUserKey = State(initialValue: active.userKey ?? "")
-            _usingSharedPushoverConfig = State(initialValue: true)
-        }
+        _pushoverToken = State(initialValue: s.pushoverToken ?? "")
+        _pushoverUserKey = State(initialValue: s.pushoverUserKey ?? "")
     }
 
     var body: some View {
@@ -256,26 +241,18 @@ struct SettingsView: View {
     private var notificationsTab: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text("Pushover credentials")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text(usingSharedPushoverConfig ? "Shared (htm-rooster)" : "Your own")
-                        .font(.caption2)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background((usingSharedPushoverConfig ? Color.gray : Color.green).opacity(0.15))
-                        .foregroundStyle(usingSharedPushoverConfig ? Color.secondary : Color.green)
-                        .clipShape(Capsule())
-                }
-                if usingSharedPushoverConfig {
-                    Text("Currently using the shared config from ~/htm-rooster/script/config.env — "
-                        + "that's why notifications show up grouped under \"HTM Rooster\" on your "
-                        + "phone. Paste a new Application Token below (from pushover.net) to give "
-                        + "Reprise its own name. Leave User key as-is; that's your account, not the app.")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
+                Text("Pushover credentials")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text("Optional — lets Reprise send you a push notification (premiere went live, "
+                    + "download finished or failed, pre-flight check results) even when you're "
+                    + "away from this Mac. Local banners on this Mac work either way, no setup "
+                    + "needed. To enable push: create a free account at pushover.net, add an "
+                    + "Application there (any name), then paste its Application Token and your "
+                    + "account's User Key below.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Application token").font(.caption2).foregroundStyle(.secondary)
@@ -285,13 +262,6 @@ struct SettingsView: View {
                     Text("User key").font(.caption2).foregroundStyle(.secondary)
                     credentialField("User key", text: $pushoverUserKey, revealed: $showPushoverUserKey)
                 }
-
-                Text("Find both at pushover.net after creating an Application (only the token "
-                    + "changes — reuse the same User key you already have).")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -391,21 +361,9 @@ struct SettingsView: View {
         engine.settings.lowDiskThresholdGB = lowDiskThresholdGB
         engine.settings.showDockIcon = showDockIcon
         engine.settings.cookieBrowserPreference = cookieBrowserPreference
+        engine.settings.pushoverToken = pushoverToken.isEmpty ? nil : pushoverToken
+        engine.settings.pushoverUserKey = pushoverUserKey.isEmpty ? nil : pushoverUserKey
         StatusItemController.shared?.refreshActivationPolicy()
-
-        // Only store as an override if it actually differs from what's
-        // already active via the shared config — otherwise every save would
-        // silently "adopt" the shared file's current values as your own,
-        // and a later change to that shared file would stop taking effect.
-        let active = Notifier.activeCredentials(override: (nil, nil))
-        let tokenChanged = pushoverToken != (active.token ?? "")
-        let userChanged = pushoverUserKey != (active.userKey ?? "")
-        if tokenChanged || userChanged {
-            engine.settings.pushoverToken = pushoverToken.isEmpty ? nil : pushoverToken
-            engine.settings.pushoverUserKey = pushoverUserKey.isEmpty ? nil : pushoverUserKey
-            engine.log("Settings saved: switched to your own Pushover credentials (no longer using the shared config.env).")
-            usingSharedPushoverConfig = false
-        }
 
         engine.log("Settings saved: check \(Int(checkLeadMinutes))min ahead, VOD interval \(vodWaitMinutes)min, notification cooldown \(Int(failureCooldownMinutes))min, download folder: \(customDownloadPath.isEmpty ? "default" : customDownloadPath), low disk warning: \(Int(lowDiskThresholdGB))GB")
     }
