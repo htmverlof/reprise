@@ -1448,7 +1448,7 @@ final class MonitorEngine: ObservableObject {
         if !force, let last = lastUpdateCheck, Date().timeIntervalSince(last) < 86400 { return }
         lastUpdateCheck = Date()
 
-        guard let url = URL(string: "https://api.github.com/repos/andrevanos/reprise/releases/latest") else { return }
+        guard let url = URL(string: "https://api.github.com/repos/reprise-labs/reprise/releases/latest") else { return }
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
         let latestTag: String? = await withCheckedContinuation { continuation in
@@ -1510,7 +1510,7 @@ final class MonitorEngine: ObservableObject {
         guard let tag = updateAvailable else {
             return (false, "No update available.")
         }
-        guard let url = URL(string: "https://github.com/andrevanos/reprise/releases/download/\(tag)/Reprise.zip") else {
+        guard let url = URL(string: "https://github.com/reprise-labs/reprise/releases/download/\(tag)/Reprise.zip") else {
             return (false, "Invalid update URL.")
         }
 

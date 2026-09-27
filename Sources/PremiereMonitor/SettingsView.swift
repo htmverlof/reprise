@@ -316,7 +316,7 @@ struct SettingsView: View {
                         .disabled(isInstallingUpdate)
 
                         Link("Release notes",
-                             destination: URL(string: "https://github.com/andrevanos/reprise/releases/tag/\(updateAvailable)")!)
+                             destination: URL(string: "https://github.com/reprise-labs/reprise/releases/tag/\(updateAvailable)")!)
                             .font(.system(size: 12))
                     }
                     if let installResult {
@@ -351,9 +351,9 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Links")
                     .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
-                Link("GitHub repository", destination: URL(string: "https://github.com/andrevanos/reprise")!)
+                Link("GitHub repository", destination: URL(string: "https://github.com/reprise-labs/reprise")!)
                     .font(.system(size: 12))
-                Link("Release notes", destination: URL(string: "https://github.com/andrevanos/reprise/releases")!)
+                Link("Release notes", destination: URL(string: "https://github.com/reprise-labs/reprise/releases")!)
                     .font(.system(size: 12))
             }
 
