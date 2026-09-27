@@ -25,6 +25,20 @@ struct SettingsView: View {
     @State private var cookieTestResult: String?
     @State private var cookieTestSucceeded = false
 
+    private enum SettingsTab: String, CaseIterable {
+        case general = "General", monitoring = "Monitoring", cookies = "Cookies", notifications = "Notifications"
+
+        var icon: String {
+            switch self {
+            case .general: return "gearshape"
+            case .monitoring: return "clock"
+            case .cookies: return "globe"
+            case .notifications: return "bell"
+            }
+        }
+    }
+    @State private var selectedTab: SettingsTab = .general
+
     init() {
         let s = MonitorEngine.shared.settings
         _checkLeadMinutes = State(initialValue: s.checkLeadMinutes)
@@ -58,20 +72,44 @@ struct SettingsView: View {
                 .font(.headline)
                 .padding(.top, 16)
 
-            // Split into tabs rather than one long scrolling form — grew too tall for a
-            // single fixed-size pane once the menu bar legend, disk threshold, Dock toggle,
-            // and cookie browser picker all landed on top of the original handful of
-            // settings. Each tab still gets its own ScrollView as a safety net in case a
-            // future addition makes any one tab too tall on its own.
-            TabView {
-                ScrollView { generalTab.padding(20) }
-                    .tabItem { Label("General", systemImage: "gearshape") }
-                ScrollView { monitoringTab.padding(20) }
-                    .tabItem { Label("Monitoring", systemImage: "clock") }
-                ScrollView { cookiesTab.padding(20) }
-                    .tabItem { Label("Cookies", systemImage: "globe") }
-                ScrollView { notificationsTab.padding(20) }
-                    .tabItem { Label("Notifications", systemImage: "bell") }
+            // A hand-rolled tab strip instead of SwiftUI's TabView: on macOS 26, TabView
+            // tries to integrate tabs into the title bar and collapses into a hidden ">>"
+            // overflow menu when that doesn't fit cleanly in a plain AppKit-hosted window
+            // like this one — found 27-09-2026, the tabs were invisible except via that
+            // chevron. A plain row of buttons has no such adaptive behavior to fight.
+            HStack(spacing: 4) {
+                ForEach(SettingsTab.allCases, id: \.self) { tab in
+                    Button {
+                        selectedTab = tab
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 15))
+                            Text(tab.rawValue)
+                                .font(.caption2)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                        .background(selectedTab == tab ? Color.accentColor.opacity(0.15) : Color.clear)
+                        .foregroundStyle(selectedTab == tab ? Color.accentColor : Color.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+
+            ScrollView {
+                Group {
+                    switch selectedTab {
+                    case .general: generalTab
+                    case .monitoring: monitoringTab
+                    case .cookies: cookiesTab
+                    case .notifications: notificationsTab
+                    }
+                }
+                .padding(20)
             }
 
             Divider()
