@@ -25,7 +25,8 @@ struct SettingsView: View {
     @State private var cookieTestSucceeded = false
 
     private enum SettingsTab: String, CaseIterable {
-        case general = "General", monitoring = "Monitoring", cookies = "Cookies", notifications = "Notifications"
+        case general = "General", monitoring = "Monitoring", cookies = "Cookies", notifications = "Notifications",
+             about = "About"
 
         var icon: String {
             switch self {
@@ -33,10 +34,15 @@ struct SettingsView: View {
             case .monitoring: return "clock"
             case .cookies: return "globe"
             case .notifications: return "bell"
+            case .about: return "info.circle"
             }
         }
     }
     @State private var selectedTab: SettingsTab = .general
+
+    @State private var isCheckingUpdate = false
+    @State private var updateCheckResult: String?
+    @State private var logCopied = false
 
     init() {
         let s = MonitorEngine.shared.settings
@@ -96,6 +102,7 @@ struct SettingsView: View {
                     case .monitoring: monitoringTab
                     case .cookies: cookiesTab
                     case .notifications: notificationsTab
+                    case .about: aboutTab
                     }
                 }
                 .padding(20)
@@ -284,6 +291,63 @@ struct SettingsView: View {
         }
     }
 
+    private var aboutTab: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Reprise \(engine.currentVersion)")
+                    .font(.system(size: 15, weight: .semibold))
+                if let updateAvailable = engine.updateAvailable {
+                    Text("⬆️ \(updateAvailable) is available")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.orange)
+                    Link("Download \(updateAvailable) from GitHub",
+                         destination: URL(string: "https://github.com/htmverlof/reprise/releases/tag/\(updateAvailable)")!)
+                        .font(.system(size: 12))
+                } else {
+                    Text("You're on the latest known version.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+
+                Button {
+                    Task { await checkForUpdatesNow() }
+                } label: {
+                    if isCheckingUpdate {
+                        ProgressView().controlSize(.small).frame(width: 14, height: 14)
+                    } else {
+                        Text("Check for updates")
+                    }
+                }
+                .disabled(isCheckingUpdate)
+                .padding(.top, 4)
+                if let updateCheckResult {
+                    Text(updateCheckResult)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Links")
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+                Link("GitHub repository", destination: URL(string: "https://github.com/htmverlof/reprise")!)
+                    .font(.system(size: 12))
+                Link("Release notes", destination: URL(string: "https://github.com/htmverlof/reprise/releases")!)
+                    .font(.system(size: 12))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Troubleshooting")
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+                Button {
+                    copyLog()
+                } label: {
+                    Label(logCopied ? "Copied!" : "Copy log to clipboard", systemImage: logCopied ? "checkmark" : "doc.on.doc")
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private func iconLegendItem(color: Color, label: String) -> some View {
         HStack(spacing: 4) {
@@ -351,6 +415,27 @@ struct SettingsView: View {
         isTestingCookies = false
         cookieTestSucceeded = ok
         cookieTestResult = message
+    }
+
+    private func checkForUpdatesNow() async {
+        isCheckingUpdate = true
+        updateCheckResult = nil
+        await engine.checkForUpdates(force: true)
+        isCheckingUpdate = false
+        if let updateAvailable = engine.updateAvailable {
+            updateCheckResult = "\(updateAvailable) is available."
+        } else {
+            updateCheckResult = "You're on the latest version (\(engine.currentVersion))."
+        }
+    }
+
+    private func copyLog() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(engine.logLines.joined(separator: "\n"), forType: .string)
+        logCopied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            logCopied = false
+        }
     }
 
     private func save() {

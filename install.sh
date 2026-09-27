@@ -35,6 +35,14 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
+# Single source of truth for the version number: Resources/VERSION. Info.plist itself
+# stays hardcoded at "1.0" otherwise — found 27-09-2026 that it had silently drifted three
+# releases behind what GitHub actually had, because nothing kept them in sync. Bump
+# Resources/VERSION when cutting a release; this stamps it into the bundle every build.
+VERSION=$(cat Resources/VERSION)
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$APP/Contents/Info.plist"
+
 if [ -f "$APP/Contents/MacOS/$EXECUTABLE_NAME" ]; then
     TS=$(date +%Y%m%d-%H%M%S)
     cp "$APP/Contents/MacOS/$EXECUTABLE_NAME" "$APP/Contents/MacOS/$EXECUTABLE_NAME.backup-$TS"

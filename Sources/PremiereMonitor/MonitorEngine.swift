@@ -1417,10 +1417,79 @@ final class MonitorEngine: ObservableObject {
         }
     }
 
+    /// Reprise's own current version, read from the bundle — stamped from Resources/VERSION
+    /// into Info.plist by install.sh at build time, not hardcoded here too (see that file
+    /// for why: Info.plist alone had already drifted three releases stale once before).
+    var currentVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+    }
+
+    /// The newer version's tag if GitHub has one, nil if up to date/unknown/not yet
+    /// checked. Read by the About tab; also drives a one-time notification when it changes.
+    @Published var updateAvailable: String?
+
+    private var lastUpdateCheck: Date?
+
+    /// Same once-a-day throttle as checkYtDlpVersion, same reason: this hits GitHub's
+    /// rate-limited public API (60 req/hour, shared with everything else on this network
+    /// that calls it — including that same yt-dlp check), so it shouldn't run more than
+    /// necessary. `force` bypasses the throttle for the manual "Check for updates" button.
+    func checkForUpdates(force: Bool = false) async {
+        if !force, let last = lastUpdateCheck, Date().timeIntervalSince(last) < 86400 { return }
+        lastUpdateCheck = Date()
+
+        guard let url = URL(string: "https://api.github.com/repos/htmverlof/reprise/releases/latest") else { return }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10
+        let latestTag: String? = await withCheckedContinuation { continuation in
+            URLSession.shared.dataTask(with: request) { data, response, error in
+                guard let data, error == nil,
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let tag = json["tag_name"] as? String else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: tag)
+            }.resume()
+        }
+
+        guard let latestTag else {
+            log("· Could not check for Reprise updates (GitHub unreachable or rate-limited).")
+            return
+        }
+
+        if isVersion(latestTag, newerThan: currentVersion) {
+            let wasAlreadyKnown = updateAvailable == latestTag
+            updateAvailable = latestTag
+            log("⬆️ Reprise \(latestTag) is available — you have \(currentVersion). See About in Settings.")
+            if !wasAlreadyKnown {
+                notify(title: "Reprise update available",
+                      message: "\(latestTag) is available (you have \(currentVersion)). See About in Settings.")
+            }
+        } else {
+            updateAvailable = nil
+            log("✅ Reprise is up to date (\(currentVersion)).")
+        }
+    }
+
+    /// Plain numeric dotted-version comparison ("1.10.0" > "1.9.0") — a string compare
+    /// would wrongly say "1.9.0" is newer than "1.10.0".
+    private func isVersion(_ a: String, newerThan b: String) -> Bool {
+        let partsA = a.split(separator: ".").map { Int($0) ?? 0 }
+        let partsB = b.split(separator: ".").map { Int($0) ?? 0 }
+        for i in 0..<max(partsA.count, partsB.count) {
+            let x = i < partsA.count ? partsA[i] : 0
+            let y = i < partsB.count ? partsB[i] : 0
+            if x != y { return x > y }
+        }
+        return false
+    }
+
     private func tick() async {
         // Vóór de guard: deze mag ook draaien als er (nog) geen video's
         // gevolgd worden. checkYtDlpVersion() remt zichzelf af tot 1x/dag.
         await checkYtDlpVersion()
+        await checkForUpdates()
         checkDiskSpace()
 
         guard !videos.isEmpty else { return }
