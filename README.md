@@ -47,17 +47,22 @@ place (keeping a timestamped backup of the old executable).
 
 ## First launch
 
-On first run, Reprise checks two things and opens its window automatically if either is
+On first run, Reprise checks three things and opens its window automatically if any are
 missing:
 
 1. **Write access to its download folder** (`~/Downloads/Reprise` by default, or wherever
    you set in Settings) — System Settings → Privacy & Security → Files and Folders →
    Reprise → Downloads Folder.
-2. **Full Disk Access**, needed to read Chrome's cookies for login-gated premieres —
-   System Settings → Privacy & Security → Full Disk Access → enable Reprise.
+2. **Full Disk Access**, needed to read Chrome's or Safari's cookies for login-gated
+   premieres — System Settings → Privacy & Security → Full Disk Access → enable Reprise.
    (Public videos still download fine without this; only cookie-gated ones need it.)
+3. **yt-dlp and ffmpeg installed** (see Requirements above). If either is missing, an
+   **"Install via Homebrew"** button opens Terminal and runs the exact `brew install`
+   command for you. The first time you use it, macOS will show a one-time permission
+   prompt — *"Reprise" wants access to control "Terminal"* — click **Allow**; that's
+   normal, not an error, and only needed once.
 
-The in-app "Check again" button re-runs both checks without needing a restart.
+The in-app "Check again" button re-runs all three checks without needing a restart.
 
 ### Keeping Full Disk Access across rebuilds
 
