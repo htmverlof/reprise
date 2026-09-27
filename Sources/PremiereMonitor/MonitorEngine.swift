@@ -295,6 +295,12 @@ final class MonitorEngine: ObservableObject {
     /// every 30 seconds, but a second, later low spell still gets its own warning.
     private var diskSpaceWarned = false
 
+    /// Same idea as diskSpaceWarned, for checkExternalTools() below — needed now that
+    /// it also runs every tick (30s), not just at startup (see 27-09-2026 fix: missing
+    /// yt-dlp/ffmpeg was only ever detected once, at launch). Without this it would
+    /// re-notify every 30 seconds for as long as the tools stay missing.
+    private var externalToolsWarned = false
+
     /// Checked at startup and every tick (not just once, unlike the folder/Chrome
     /// checks above) since free space genuinely changes over time — other downloads,
     /// other apps, Time Machine locals, all eat into it between one premiere and the
@@ -335,12 +341,16 @@ final class MonitorEngine: ObservableObject {
 
         guard !missing.isEmpty else {
             permissionWarnings["external-tools"] = nil
+            externalToolsWarned = false
             return
         }
         let names = missing.joined(separator: " and ")
         let msg = "\(names) not found — Reprise can't download anything without "
             + "\(missing.count > 1 ? "them" : "it"). Install via Homebrew: brew install \(missing.joined(separator: " "))"
         permissionWarnings["external-tools"] = msg
+
+        guard !externalToolsWarned else { return }
+        externalToolsWarned = true
         log("❌ \(msg)")
         if !silent {
             notify(title: "Reprise: missing \(names)", message: msg)
@@ -1586,6 +1596,7 @@ final class MonitorEngine: ObservableObject {
         await checkYtDlpVersion()
         await checkForUpdates()
         checkDiskSpace()
+        checkExternalTools()
 
         guard !videos.isEmpty else { return }
         for index in videos.indices {
