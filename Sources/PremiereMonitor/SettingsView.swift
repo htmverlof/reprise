@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var customDownloadPath: String
     @State private var lowDiskThresholdGB: Double
     @State private var showDockIcon: Bool
+    @State private var cookieBrowserPreference: String
     @State private var pushoverToken: String
     @State private var pushoverUserKey: String
     @State private var usingSharedPushoverConfig: Bool
@@ -32,6 +33,7 @@ struct SettingsView: View {
         _customDownloadPath = State(initialValue: s.customDownloadPath ?? "")
         _lowDiskThresholdGB = State(initialValue: s.lowDiskThresholdGB ?? 5)
         _showDockIcon = State(initialValue: s.showDockIcon ?? false)
+        _cookieBrowserPreference = State(initialValue: s.cookieBrowserPreference ?? "auto")
 
         let hasOwnCredentials = !(s.pushoverToken ?? "").trimmingCharacters(in: .whitespaces).isEmpty
             && !(s.pushoverUserKey ?? "").trimmingCharacters(in: .whitespaces).isEmpty
@@ -102,6 +104,22 @@ struct SettingsView: View {
             Toggle("Show icon in Dock", isOn: $showDockIcon)
                 .help("Off (default): menu bar only, no Dock icon. On: also keeps a permanent Dock icon, "
                     + "not just while a window happens to be open.")
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Read YouTube login cookies from")
+                    .font(.caption).foregroundStyle(.secondary)
+                Picker("", selection: $cookieBrowserPreference) {
+                    Text("Automatic (Chrome, then Safari)").tag("auto")
+                    Text("Chrome").tag("chrome")
+                    Text("Safari").tag("safari")
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                Text("Only matters if you have both installed but are only logged into "
+                    + "YouTube in one of them — Automatic always prefers Chrome.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Download location")
@@ -297,6 +315,7 @@ struct SettingsView: View {
         engine.settings.customDownloadPath = customDownloadPath.isEmpty ? nil : customDownloadPath
         engine.settings.lowDiskThresholdGB = lowDiskThresholdGB
         engine.settings.showDockIcon = showDockIcon
+        engine.settings.cookieBrowserPreference = cookieBrowserPreference
         StatusItemController.shared?.refreshActivationPolicy()
 
         // Only store as an override if it actually differs from what's

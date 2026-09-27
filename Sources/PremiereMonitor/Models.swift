@@ -122,4 +122,10 @@ struct AppSettings: Codable, Equatable {
     /// nil/false = the original behavior (accessory app, briefly becomes regular only
     /// while a window is open, for keyboard focus — see StatusItemController).
     var showDockIcon: Bool? = nil
+    /// Which browser yt-dlp reads YouTube login cookies from: "chrome", "safari", or
+    /// nil/anything else for automatic (Chrome if present, else Safari). Explicit so a Mac
+    /// with both installed but only logged into one doesn't get the wrong one guessed —
+    /// auto-detection prefers Chrome unconditionally, which is wrong if you're actually
+    /// logged into YouTube in Safari.
+    var cookieBrowserPreference: String? = nil
 }

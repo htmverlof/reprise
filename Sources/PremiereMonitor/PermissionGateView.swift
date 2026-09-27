@@ -3,7 +3,7 @@ import AppKit
 
 /// Shown instead of the normal main window content whenever Reprise is missing a
 /// permission it needs — both the download folder (without it the app can't save
-/// anything) and Chrome cookie access (without it login-gated premieres silently
+/// anything) and browser cookie access (without it login-gated premieres silently
 /// fail) block on this screen now, one section per missing permission.
 struct PermissionGateView: View {
     @ObservedObject private var engine = MonitorEngine.shared
@@ -30,15 +30,18 @@ struct PermissionGateView: View {
                 settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_DownloadsFolder")
             ))
         }
-        if engine.permissionWarnings["chrome-access"] != nil {
+        if let warning = engine.permissionWarnings["cookie-access"] {
+            // The stored warning text already names the specific browser (Chrome or
+            // Safari) MonitorEngine detected, so it's used directly here rather than
+            // re-deriving a hardcoded "Chrome" message that could be wrong on a Safari-only Mac.
             result.append(Issue(
-                id: "chrome-access",
-                title: "Chrome cookie access",
-                message: "macOS is blocking Reprise from reading Chrome's cookies — without this, "
-                    + "premieres that need you to be logged in will fail to download.",
-                instructions: "Grant access in System Settings → Privacy & Security → Full Disk Access → "
-                    + "enable Reprise, then check again below. (Not the Google Chrome toggle under Files "
-                    + "and Folders — that one silently un-checks itself for Reprise.)",
+                id: "cookie-access",
+                // Already self-contained (names the browser, the exact Settings path, and
+                // that public downloads still work) — no separate instructions needed here,
+                // unlike the download-folder issue above.
+                title: "Browser cookie access",
+                message: warning,
+                instructions: "",
                 settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
             ))
         }

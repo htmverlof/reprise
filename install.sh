@@ -46,7 +46,15 @@ cp .build/release/Reprise "$APP/Contents/MacOS/$EXECUTABLE_NAME"
 # asked to sign with a name it can't find in any keychain. Ad-hoc still works, it just
 # means Full Disk Access needs re-granting after every rebuild until a persistent local
 # identity is set up there too (see README: "Keeping Full Disk Access across rebuilds").
-if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
+#
+# Deliberately checks presence (find-certificate), not "security find-identity -p
+# codesigning" — that filters to identities *trusted* for code signing, and this
+# self-signed cert (never explicitly marked "Always Trust") fails that filter even though
+# codesign has been signing with it directly, successfully, all along. Using
+# find-identity here made this check silently fall back to ad-hoc on 27-09-2026 despite
+# the real identity being right there and working — the whole point of this identity is
+# defeated if the fallback fires when it doesn't need to.
+if security find-certificate -c "$IDENTITY" "$HOME/Library/Keychains/login.keychain-db" >/dev/null 2>&1; then
     codesign --force --deep -s "$IDENTITY" "$APP"
     echo "Installed and restarted Reprise, signed with '$IDENTITY'."
 else

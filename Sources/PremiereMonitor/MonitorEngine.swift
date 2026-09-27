@@ -17,7 +17,7 @@ final class MonitorEngine: ObservableObject {
     /// Active "something's wrong" warnings, shown as a banner at the top of the main
     /// window — originally just missing permissions, now anything that could quietly
     /// wreck a download (e.g. "disk-space"). Keyed by a stable id per check (e.g.
-    /// "chrome-access") so a check can add/remove just its own line without touching
+    /// "cookie-access") so a check can add/remove just its own line without touching
     /// anyone else's — meant to grow as more checks get added, not stay a single
     /// hardcoded message. Added 26-09-2026 after a TCC block on Chrome's cookie folder
     /// ran silently for over an hour with nothing but a log line to show for it.
@@ -45,7 +45,7 @@ final class MonitorEngine: ObservableObject {
         self.videos = Store.load()
         log("Reprise started. Download folder: \(downloadRoot.path)")
         checkDownloadFolderWritable()
-        checkChromeCookieAccess()
+        checkCookieBrowserAccess()
         checkDiskSpace()
         for v in videos {
             log("Loaded: [\(v.label)] scheduled \(v.scheduledDate.formatted(date: .abbreviated, time: .standard)), status=\(v.status.displayName)")
@@ -160,11 +160,64 @@ final class MonitorEngine: ObservableObject {
         }
     }
 
-    /// Tests whether we can read Chrome's profile folder at all — the same
-    /// TCC permission ("Files and Folders" access to Google Chrome) that
-    /// yt-dlp's --cookies-from-browser needs. Distinct from testCookies():
-    /// this only checks file-level access, not whether YouTube accepts the
-    /// login inside. Runs once at startup, same pattern as
+    /// Chrome first (best-tested), Safari as a fallback for Macs without Chrome — yt-dlp
+    /// supports both via --cookies-from-browser. nil means neither is available, in which
+    /// case cookie-gated premieres just won't work; public videos are unaffected either
+    /// way. Re-evaluated on every check rather than cached once, so installing Chrome
+    /// later while Reprise is already running gets picked up without a restart.
+    ///
+    /// Added 27-09-2026: this used to be hardcoded to Chrome everywhere, so a Mac with
+    /// only Safari installed got a single quiet log line ("Chrome not found") and nothing
+    /// else — no banner, no push, and yt-dlp kept getting passed "--cookies-from-browser
+    /// chrome" regardless, failing and silently retrying without cookies every single time.
+    private enum CookieBrowser {
+        case chrome, safari
+
+        var ytdlpName: String {
+            switch self {
+            case .chrome: return "chrome"
+            case .safari: return "safari"
+            }
+        }
+
+        var displayName: String {
+            switch self {
+            case .chrome: return "Chrome"
+            case .safari: return "Safari"
+            }
+        }
+
+        /// Just an "is it there at all" probe for our own permission banner — not
+        /// necessarily the exact path yt-dlp itself reads cookies from, which it locates
+        /// internally per browser.
+        var probePath: String {
+            switch self {
+            case .chrome: return ("~/Library/Application Support/Google/Chrome" as NSString).expandingTildeInPath
+            case .safari: return ("~/Library/Cookies" as NSString).expandingTildeInPath
+            }
+        }
+    }
+
+    private var cookieBrowser: CookieBrowser? {
+        // An explicit choice in Settings always wins — auto-detection prefers Chrome
+        // unconditionally, which is the wrong guess on a Mac that has both installed but
+        // is only actually logged into YouTube in Safari.
+        switch settings.cookieBrowserPreference {
+        case "chrome":
+            return FileManager.default.fileExists(atPath: CookieBrowser.chrome.probePath) ? .chrome : nil
+        case "safari":
+            return FileManager.default.fileExists(atPath: CookieBrowser.safari.probePath) ? .safari : nil
+        default:
+            if FileManager.default.fileExists(atPath: CookieBrowser.chrome.probePath) { return .chrome }
+            if FileManager.default.fileExists(atPath: CookieBrowser.safari.probePath) { return .safari }
+            return nil
+        }
+    }
+
+    /// Tests whether we can actually read the detected browser's cookie data — the same
+    /// TCC permission (Full Disk Access) that yt-dlp's --cookies-from-browser needs.
+    /// Distinct from testCookies(): this only checks file-level access, not whether
+    /// YouTube accepts the login inside. Runs once at startup, same pattern as
     /// checkDownloadFolderWritable() above.
     ///
     /// Added 26-09-2026: without this, a TCC block here was invisible until
@@ -179,24 +232,23 @@ final class MonitorEngine: ObservableObject {
     /// ID) — confirmed 26-09-2026, toggling it on and then triggering another access
     /// attempt (e.g. this check) made it flip back off by itself. Full Disk Access is the
     /// older, sticky category and doesn't have that problem.
-    private func checkChromeCookieAccess(silent: Bool = false) {
-        let chromeProfile = ("~/Library/Application Support/Google/Chrome" as NSString).expandingTildeInPath
-        guard FileManager.default.fileExists(atPath: chromeProfile) else {
-            log("· Chrome not found at \(chromeProfile) — cookie-based login won't be available; downloads of public videos still work.")
+    private func checkCookieBrowserAccess(silent: Bool = false) {
+        guard let browser = cookieBrowser else {
+            log("· No supported browser (Chrome or Safari) found — cookie-based login won't be available; downloads of public videos still work.")
             return
         }
         do {
-            _ = try FileManager.default.contentsOfDirectory(atPath: chromeProfile)
-            log("✅ Can read Chrome's profile folder — cookie access should work.")
-            permissionWarnings["chrome-access"] = nil
+            _ = try FileManager.default.contentsOfDirectory(atPath: browser.probePath)
+            log("✅ Can read \(browser.displayName)'s cookie data — cookie access should work.")
+            permissionWarnings["cookie-access"] = nil
         } catch {
-            log("❌ CANNOT READ Chrome's profile folder: \(error.localizedDescription). macOS is blocking access.")
-            permissionWarnings["chrome-access"] = "Can't read Chrome's cookies — grant access in "
+            log("❌ CANNOT READ \(browser.displayName)'s cookie data: \(error.localizedDescription). macOS is blocking access.")
+            permissionWarnings["cookie-access"] = "Can't read \(browser.displayName)'s cookies — grant access in "
                 + "System Settings → Privacy & Security → Full Disk Access → enable Reprise, then restart Reprise. "
                 + "Downloads of public videos still work meanwhile."
             if !silent {
-                notify(title: "Reprise: Chrome access blocked",
-                      message: "Cannot read Chrome's cookies — macOS is blocking it. Grant access in "
+                notify(title: "Reprise: \(browser.displayName) access blocked",
+                      message: "Cannot read \(browser.displayName)'s cookies — macOS is blocking it. Grant access in "
                              + "System Settings → Privacy & Security → Full Disk Access → enable Reprise, "
                              + "then restart Reprise. Downloads of public videos still work meanwhile.")
             }
@@ -256,7 +308,7 @@ final class MonitorEngine: ObservableObject {
     /// user already knows about — they just clicked the button because of it.
     func recheckPermissions() {
         checkDownloadFolderWritable(silent: true)
-        checkChromeCookieAccess(silent: true)
+        checkCookieBrowserAccess(silent: true)
         checkDiskSpace(silent: true)
     }
 
@@ -305,10 +357,12 @@ final class MonitorEngine: ObservableObject {
         }
     }
 
-    /// Tests whether yt-dlp can actually read Chrome's YouTube login cookies right now,
-    /// using one of the tracked premieres (or a known-stable channel) as the target.
+    /// Tests whether yt-dlp can actually read the detected browser's YouTube login
+    /// cookies right now, using one of the tracked premieres (or a known-stable channel)
+    /// as the target.
     func testCookies() async -> (ok: Bool, message: String) {
         let testUrl = videos.first?.url ?? "https://www.youtube.com/@LofiGirl/live"
+        let browserName = cookieBrowser?.displayName ?? "your browser"
 
         // Bewust níet via fetchMeta: die valt bij geweigerde cookies terug op
         // een poging zónder, en dan zou deze test "cookies werken" melden
@@ -316,33 +370,34 @@ final class MonitorEngine: ObservableObject {
         let (rc, out, err) = await runProcess(ytDlpPath, metaArgs(url: testUrl, metCookies: true))
         if rc == 0, !out.isEmpty {
             cookiesGeweigerd = false          // usable again after a fresh login
-            log("Cookie test passed — YouTube accepts your Chrome login.")
-            return (true, "Success — YouTube accepts your Chrome login.")
+            log("Cookie test passed — YouTube accepts your \(browserName) login.")
+            return (true, "Success — YouTube accepts your \(browserName) login.")
         }
         cookiesGeweigerd = true
         let detail = tail(err)
         log("Cookie test FAILED (rc=\(rc)): \(detail)")
         if cookieFoutmelding(err) {
-            return (false, "YouTube is rejecting your Chrome cookies. Log in again using the button "
+            return (false, "YouTube is rejecting your \(browserName) cookies. Log in again using the button "
                         + "next to this one. Downloads of public videos keep working without cookies.")
         }
         return (false, "Failed: \(detail.isEmpty ? "could not fetch YouTube data." : detail)")
     }
 
-    /// Opens Chrome on YouTube so you can log in there again. That's the only
-    /// real fix for rejected cookies: yt-dlp reads them from Chrome's own
-    /// profile, so a valid login needs to live there.
+    /// Opens YouTube in whichever browser Reprise is reading cookies from, so you can log
+    /// in there again — the only real fix for rejected cookies, since yt-dlp reads them
+    /// from that browser's own profile, so a valid login needs to live there.
     func openYouTubeLogin() {
         let chrome = URL(fileURLWithPath: "/Applications/Google Chrome.app")
         let youtube = URL(string: "https://www.youtube.com/account")!
-        let config = NSWorkspace.OpenConfiguration()
         if FileManager.default.fileExists(atPath: chrome.path) {
+            let config = NSWorkspace.OpenConfiguration()
             NSWorkspace.shared.open([youtube], withApplicationAt: chrome, configuration: config)
             log("Opened Chrome on YouTube — log in there, then run the cookie test again.")
         } else {
             NSWorkspace.shared.open(youtube)
-            log("Chrome not found; opened YouTube in your default browser instead. "
-                + "Note: yt-dlp reads cookies from Chrome, so you need to log in there.")
+            let browserName = cookieBrowser?.displayName ?? "your browser"
+            log("Opened YouTube in your default browser. Note: yt-dlp reads cookies from "
+                + "\(browserName), so log in there, then run the cookie test again.")
         }
     }
 
@@ -836,7 +891,7 @@ final class MonitorEngine: ObservableObject {
             "--ignore-no-formats-error",
             "--user-agent", userAgent,
         ]
-        if metCookies { args += ["--cookies-from-browser", "chrome"] }
+        if metCookies, let browser = cookieBrowser { args += ["--cookies-from-browser", browser.ytdlpName] }
         args.append(url)
         return args
     }
@@ -978,8 +1033,9 @@ final class MonitorEngine: ObservableObject {
             "--print", "after_move:%(filepath)s",
             "-o", outTemplate
         ]
-        if !cookiesGeweigerd {
-            args += ["--cookies-from-browser", "chrome"]
+        let browser = cookieBrowser
+        if !cookiesGeweigerd, let browser {
+            args += ["--cookies-from-browser", browser.ytdlpName]
         }
         if isLive {
             args += ["--live-from-start", "--hls-use-mpegts", "--hls-prefer-ffmpeg"]
@@ -996,7 +1052,7 @@ final class MonitorEngine: ObservableObject {
         if rc != 0, cookieFoutmelding(err), !cookiesGeweigerd {
             log("[\(label)] Cookies rejected — proceeding without cookies from now on.")
             cookiesGeweigerd = true
-            let zonder = args.filter { $0 != "--cookies-from-browser" && $0 != "chrome" }
+            let zonder = args.filter { $0 != "--cookies-from-browser" && $0 != browser?.ytdlpName }
             (rc, err) = await runDownloadProcess(ytDlpPath, zonder, videoId: videoId)
         }
         downloadProgress[videoId] = nil
@@ -1239,8 +1295,10 @@ final class MonitorEngine: ObservableObject {
         if permissionWarnings["download-folder"] != nil {
             problems.append("Can't write to the download folder — check Full Disk Access.")
         }
-        if permissionWarnings["chrome-access"] != nil {
-            problems.append("Can't read Chrome's cookies — login-gated premieres will fail.")
+        if let browser = cookieBrowser, permissionWarnings["cookie-access"] != nil {
+            problems.append("Can't read \(browser.displayName)'s cookies — login-gated premieres will fail.")
+        } else if cookieBrowser == nil {
+            problems.append("No supported browser (Chrome or Safari) found — login-gated premieres will fail.")
         }
         if let diskWarning = permissionWarnings["disk-space"] {
             problems.append(diskWarning)
