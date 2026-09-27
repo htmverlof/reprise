@@ -247,12 +247,8 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Pushover credentials")
                     .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
-                Text("Optional — lets Reprise send you a push notification (premiere went live, "
-                    + "download finished or failed, pre-flight check results) even when you're "
-                    + "away from this Mac. Local banners on this Mac work either way, no setup "
-                    + "needed. To enable push: create a free account at pushover.net, add an "
-                    + "Application there (any name), then paste its Application Token and your "
-                    + "account's User Key below.")
+                Text("Optional — push notifications when you're away from this Mac. Get your "
+                    + "keys at pushover.net.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
