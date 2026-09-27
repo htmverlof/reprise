@@ -22,7 +22,14 @@ IDENTITY="Encore Local Signing"
 APP="/Applications/Reprise.app"
 EXECUTABLE_NAME="Reprise"
 
-swift build -c release
+# --build-system native: the default "swiftbuild" engine (XCBuild-based, standard since
+# Swift 6) needs resources that only ship inside a full Xcode.app — on a Mac with just the
+# Command Line Tools (no Xcode installed) it fails outright with "Could not initialize
+# build system... Unknown error parsing property list". The native engine only needs the
+# Command Line Tools and works the same either way, so it's used unconditionally here
+# rather than trying to detect which one is needed. It's marked deprecated upstream but
+# still fully functional; harmless warning only.
+swift build -c release --build-system native
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
