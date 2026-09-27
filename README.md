@@ -19,14 +19,19 @@ green = idle and healthy — right-click the icon for a quick status menu).
 
 ## Build and install
 
-```
+On a fresh Mac, starting from nothing:
+
+```bash
+brew install yt-dlp ffmpeg   # skip if already installed
+git clone https://github.com/htmverlof/reprise.git
+cd reprise
 ./install.sh
 ```
 
-This builds a release binary, assembles `/Applications/Reprise.app` (icon and Info.plist
-come from `Resources/`), signs it, and (re)launches it. Re-run it any time you pull new
-changes — it replaces the previous build in place (keeping a timestamped backup of the
-old executable).
+Already have the repo cloned? Just re-run `./install.sh` any time you pull new changes —
+it builds a release binary, assembles `/Applications/Reprise.app` (icon and Info.plist
+come from `Resources/`), signs it, and (re)launches it, replacing the previous build in
+place (keeping a timestamped backup of the old executable).
 
 ## First launch
 
