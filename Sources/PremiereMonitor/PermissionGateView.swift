@@ -14,7 +14,9 @@ struct PermissionGateView: View {
         let title: String
         let message: String
         let instructions: String
-        let settingsURL: URL?
+        let actionLabel: String?
+        let actionIcon: String
+        let action: (() -> Void)?
     }
 
     private var issues: [Issue] {
@@ -27,7 +29,13 @@ struct PermissionGateView: View {
                     + "Reprise can't save anything it downloads.",
                 instructions: "Grant access in System Settings → Privacy & Security → Files and Folders → "
                     + "Reprise → Downloads Folder, then check again below.",
-                settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_DownloadsFolder")
+                actionLabel: "Open System Settings",
+                actionIcon: "gearshape",
+                action: {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_DownloadsFolder") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
             ))
         }
         if let warning = engine.permissionWarnings["cookie-access"] {
@@ -42,7 +50,24 @@ struct PermissionGateView: View {
                 title: "Browser cookie access",
                 message: warning,
                 instructions: "",
-                settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
+                actionLabel: "Open System Settings",
+                actionIcon: "gearshape",
+                action: {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            ))
+        }
+        if let warning = engine.permissionWarnings["external-tools"] {
+            result.append(Issue(
+                id: "external-tools",
+                title: "Missing yt-dlp / ffmpeg",
+                message: warning,
+                instructions: "",
+                actionLabel: "Install via Homebrew",
+                actionIcon: "terminal",
+                action: { engine.installMissingTools() }
             ))
         }
         return result
@@ -68,11 +93,11 @@ struct PermissionGateView: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: 380)
-                        if let url = issue.settingsURL {
+                        if let action = issue.action, let label = issue.actionLabel {
                             Button {
-                                NSWorkspace.shared.open(url)
+                                action()
                             } label: {
-                                Label("Open System Settings", systemImage: "gearshape")
+                                Label(label, systemImage: issue.actionIcon)
                             }
                             .buttonStyle(.bordered)
                         }

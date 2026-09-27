@@ -25,7 +25,24 @@ final class MonitorEngine: ObservableObject {
 
     private var loopTask: Task<Void, Never>?
 
-    private let ytDlpPath = "/opt/homebrew/bin/yt-dlp"
+    /// Checks the usual Homebrew locations (Apple Silicon and Intel) plus a couple of
+    /// other common install prefixes — was hardcoded to the Apple Silicon Homebrew path
+    /// only, which would have silently broken on an Intel Mac using /usr/local instead.
+    private static func findExecutable(_ name: String) -> String? {
+        let candidates = ["/opt/homebrew/bin/\(name)", "/usr/local/bin/\(name)",
+                          "/opt/local/bin/\(name)", "/usr/bin/\(name)"]
+        return candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) })
+    }
+
+    /// Falls back to the Apple Silicon Homebrew path even when not found, so existing
+    /// error paths (which already report a clear "couldn't run yt-dlp" failure) still have
+    /// *some* path to try and fail against, rather than an empty string.
+    private var ytDlpPath: String {
+        MonitorEngine.findExecutable("yt-dlp") ?? "/opt/homebrew/bin/yt-dlp"
+    }
+    private var ffmpegPath: String? { MonitorEngine.findExecutable("ffmpeg") }
+    private var brewPath: String? { MonitorEngine.findExecutable("brew") }
+
     private let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko)"
 
     var downloadRoot: URL {
@@ -47,6 +64,7 @@ final class MonitorEngine: ObservableObject {
         checkDownloadFolderWritable()
         checkCookieBrowserAccess()
         checkDiskSpace()
+        checkExternalTools()
         for v in videos {
             log("Loaded: [\(v.label)] scheduled \(v.scheduledDate.formatted(date: .abbreviated, time: .standard)), status=\(v.status.displayName)")
         }
@@ -303,6 +321,59 @@ final class MonitorEngine: ObservableObject {
         }
     }
 
+    /// Without yt-dlp or ffmpeg, Reprise can't download anything at all — more fundamental
+    /// even than the Chrome/Safari cookie check, since that only affects login-gated
+    /// premieres. Added 27-09-2026: previously undetected until the first real check near
+    /// a premiere's scheduled time, which then failed with a raw, cryptic system error
+    /// ("Error Domain=NSCocoaErrorDomain Code=4 ...") instead of a clear "install this"
+    /// message — exactly the kind of late, unreadable failure every other check here was
+    /// already built to avoid.
+    private func checkExternalTools(silent: Bool = false) {
+        var missing: [String] = []
+        if !FileManager.default.isExecutableFile(atPath: ytDlpPath) { missing.append("yt-dlp") }
+        if ffmpegPath == nil { missing.append("ffmpeg") }
+
+        guard !missing.isEmpty else {
+            permissionWarnings["external-tools"] = nil
+            return
+        }
+        let names = missing.joined(separator: " and ")
+        let msg = "\(names) not found — Reprise can't download anything without "
+            + "\(missing.count > 1 ? "them" : "it"). Install via Homebrew: brew install \(missing.joined(separator: " "))"
+        permissionWarnings["external-tools"] = msg
+        log("❌ \(msg)")
+        if !silent {
+            notify(title: "Reprise: missing \(names)", message: msg)
+        }
+    }
+
+    /// Opens Terminal and runs `brew install <missing tools>` directly, so fixing this
+    /// doesn't require leaving the app to go figure out the right command. Deliberately
+    /// visible in a real Terminal window rather than run invisibly inside Reprise — this
+    /// installs system software via Homebrew, and that's worth seeing happen for real
+    /// rather than trusting a black box.
+    func installMissingTools() {
+        var missing: [String] = []
+        if !FileManager.default.isExecutableFile(atPath: ytDlpPath) { missing.append("yt-dlp") }
+        if ffmpegPath == nil { missing.append("ffmpeg") }
+        guard !missing.isEmpty else { return }
+
+        guard let brew = brewPath else {
+            log("⚠️ Homebrew itself isn't installed — install it first from https://brew.sh, then try again.")
+            notify(title: "Reprise: Homebrew not found",
+                  message: "Install Homebrew first from https://brew.sh, then use \"Install via Homebrew\" again.")
+            return
+        }
+
+        let command = "\(brew) install \(missing.joined(separator: " "))"
+        let script = "tell application \"Terminal\"\nactivate\ndo script \"\(command)\"\nend tell"
+        log("Opening Terminal to run: \(command)")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", script]
+        try? process.run()
+    }
+
     /// Re-runs the startup checks on demand (the "Check again" button in
     /// PermissionGateView), without re-sending push notifications for a state the
     /// user already knows about — they just clicked the button because of it.
@@ -310,6 +381,7 @@ final class MonitorEngine: ObservableObject {
         checkDownloadFolderWritable(silent: true)
         checkCookieBrowserAccess(silent: true)
         checkDiskSpace(silent: true)
+        checkExternalTools(silent: true)
     }
 
     /// Your own Pushover credentials from Settings, if you've set them.
@@ -733,11 +805,7 @@ final class MonitorEngine: ObservableObject {
                                               options: .regularExpression)
         let doel = pad(doelNaam)
         log("[\(label)] Stream ended before merging — merging video and audio myself…")
-        // Niet één vast pad: op 16-09-2026 verhuisde Homebrew van ~/homebrew
-        // naar /opt/homebrew en dan klopt een hardgecodeerd pad ineens niet meer.
-        let ffmpegKandidaten = ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg",
-                                "/opt/local/bin/ffmpeg", "/usr/bin/ffmpeg"]
-        guard let ffmpeg = ffmpegKandidaten.first(where: { fm.isExecutableFile(atPath: $0) }) else {
+        guard let ffmpeg = ffmpegPath else {
             log("[\(label)] No ffmpeg found — video and audio remain as separate files.")
             return nil
         }

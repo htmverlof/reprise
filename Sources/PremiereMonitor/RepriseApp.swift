@@ -29,7 +29,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // pops up on screen, so a blocked permission would otherwise sit invisible behind
         // the menu bar icon until someone happens to click it. Force the window open right
         // away so a permission problem is impossible to miss.
-        if engine.permissionWarnings["download-folder"] != nil || engine.permissionWarnings["cookie-access"] != nil {
+        if engine.permissionWarnings["download-folder"] != nil || engine.permissionWarnings["cookie-access"] != nil
+            || engine.permissionWarnings["external-tools"] != nil {
             statusItemController.showMainWindow()
         }
     }

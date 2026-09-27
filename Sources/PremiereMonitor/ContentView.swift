@@ -10,6 +10,7 @@ struct ContentView: View {
 
     private var isBlockedByPermissions: Bool {
         engine.permissionWarnings["download-folder"] != nil || engine.permissionWarnings["cookie-access"] != nil
+            || engine.permissionWarnings["external-tools"] != nil
     }
 
     var body: some View {
