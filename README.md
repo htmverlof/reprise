@@ -155,3 +155,7 @@ on first launch).
 
 - Tracked list, settings, log: `~/Library/Application Support/Reprise/`
 - Downloads: `~/Downloads/Reprise` by default (configurable in Settings)
+
+## License
+
+[MIT](LICENSE) — do whatever you want with it.
