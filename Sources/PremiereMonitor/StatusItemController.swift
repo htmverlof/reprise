@@ -76,16 +76,22 @@ final class StatusItemController: NSObject {
         guard let button = statusItem.button else { return }
         let downloading = videos.first { $0.status == .downloadingLive || $0.status == .downloadingVod }
 
-        let color: NSColor
+        let color: NSColor?
         if !warnings.isEmpty {
             color = .systemRed
         } else if downloading != nil {
             color = .systemBlue
         } else {
-            color = .systemGreen
+            color = nil // all good — nothing needs attention
         }
 
-        button.image = statusIconImage(color: color)
+        // Default (nil setting) is minimal: color only draws the eye when something needs
+        // it (a problem or an active download); "all good" blends into the menu bar like any
+        // other menu extra instead of permanently glowing green. Opt out in Settings to keep
+        // the old always-green-when-idle look.
+        let minimal = MonitorEngine.shared.settings.minimalMenuBarIcon ?? true
+        let useTemplate = color == nil && minimal
+        button.image = statusIconImage(color: color ?? .systemGreen, template: useTemplate)
         button.toolTip = statusTooltip(warnings: warnings, videos: videos, downloading: downloading, progress: progress)
     }
 
@@ -93,7 +99,11 @@ final class StatusItemController: NSObject {
     /// recolored per status — was still the plain system "video.badge.plus" symbol here
     /// until 27-09-2026, left over from before the app icon changed, so the two no longer
     /// matched at a glance.
-    private func statusIconImage(color: NSColor) -> NSImage {
+    /// `template: true` draws in black and marks the image as a template — AppKit then
+    /// re-tints it automatically to match the menu bar (light or dark), the same way any
+    /// ordinary monochrome menu extra behaves, instead of standing out in a fixed color.
+    private func statusIconImage(color: NSColor, template: Bool = false) -> NSImage {
+        let drawColor: NSColor = template ? .black : color
         let canvas: CGFloat = 64
         let image = NSImage(size: NSSize(width: canvas, height: canvas))
         image.lockFocus()
@@ -111,7 +121,7 @@ final class StatusItemController: NSObject {
                 let p = CGPoint(x: center.x + ringRadius * CGFloat(cos(t)), y: center.y + ringRadius * CGFloat(sin(t)))
                 if i == 0 { ctx.move(to: p) } else { ctx.addLine(to: p) }
             }
-            ctx.setStrokeColor(color.cgColor)
+            ctx.setStrokeColor(drawColor.cgColor)
             ctx.setLineWidth(ringWidth)
             ctx.setLineCap(.round)
             ctx.setLineJoin(.round)
@@ -127,7 +137,7 @@ final class StatusItemController: NSObject {
             ctx.move(to: CGPoint(x: -chevron * 0.9, y: chevron))
             ctx.addLine(to: CGPoint(x: chevron * 0.5, y: 0))
             ctx.addLine(to: CGPoint(x: -chevron * 0.9, y: -chevron))
-            ctx.setStrokeColor(color.cgColor)
+            ctx.setStrokeColor(drawColor.cgColor)
             ctx.setLineWidth(ringWidth)
             ctx.setLineCap(.round)
             ctx.setLineJoin(.round)
@@ -140,12 +150,12 @@ final class StatusItemController: NSObject {
             ctx.addLine(to: CGPoint(x: center.x - R * 0.5, y: center.y + R * 0.866))
             ctx.addLine(to: CGPoint(x: center.x - R * 0.5, y: center.y - R * 0.866))
             ctx.closePath()
-            ctx.setFillColor(color.cgColor)
+            ctx.setFillColor(drawColor.cgColor)
             ctx.fillPath()
         }
         image.unlockFocus()
         image.size = NSSize(width: 18, height: 18)
-        image.isTemplate = false
+        image.isTemplate = template
         return image
     }
 
@@ -257,6 +267,14 @@ final class StatusItemController: NSObject {
     /// immediately instead of only on the next launch.
     func refreshActivationPolicy() {
         updateActivationPolicy()
+    }
+
+    /// Called right after Settings saves "Only color the icon for problems or downloads",
+    /// so it takes effect immediately — updateStatusIcon otherwise only redraws in response
+    /// to warnings/videos/progress changing, none of which this setting affects on its own.
+    func refreshIcon() {
+        let engine = MonitorEngine.shared
+        updateStatusIcon(warnings: engine.permissionWarnings, videos: engine.videos, progress: engine.downloadProgress)
     }
 
     /// Closes any window that isn't one of ours (e.g. an accidentally opened empty

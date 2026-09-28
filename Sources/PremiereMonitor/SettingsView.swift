@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var showDockIcon: Bool
     @State private var startAtLogin = SMAppService.mainApp.status == .enabled
     @State private var startAtLoginNote: String?
+    @State private var minimalMenuBarIcon: Bool
     @State private var cookieBrowserPreference: String
     @State private var pushoverToken: String
     @State private var pushoverUserKey: String
@@ -57,6 +58,7 @@ struct SettingsView: View {
         _customDownloadPath = State(initialValue: s.customDownloadPath ?? "")
         _lowDiskThresholdGB = State(initialValue: s.lowDiskThresholdGB ?? 5)
         _showDockIcon = State(initialValue: s.showDockIcon ?? false)
+        _minimalMenuBarIcon = State(initialValue: s.minimalMenuBarIcon ?? true)
         _cookieBrowserPreference = State(initialValue: s.cookieBrowserPreference ?? "auto")
         _pushoverToken = State(initialValue: s.pushoverToken ?? "")
         _pushoverUserKey = State(initialValue: s.pushoverUserKey ?? "")
@@ -143,8 +145,12 @@ struct SettingsView: View {
                 HStack(spacing: 16) {
                     iconLegendItem(color: .red, label: "Problem")
                     iconLegendItem(color: .blue, label: "Downloading")
-                    iconLegendItem(color: .green, label: "All good")
+                    iconLegendItem(color: minimalMenuBarIcon ? .primary : .green, label: "All good")
                 }
+                Toggle("Only color the icon for problems or downloads", isOn: $minimalMenuBarIcon)
+                    .help("On (default): the icon blends into the menu bar when everything's fine, "
+                        + "only turning red or blue when something needs attention. Off: always green "
+                        + "when idle and healthy, like before.")
             }
 
             Toggle("Show icon in Dock", isOn: $showDockIcon)
@@ -529,10 +535,12 @@ struct SettingsView: View {
         engine.settings.customDownloadPath = customDownloadPath.isEmpty ? nil : customDownloadPath
         engine.settings.lowDiskThresholdGB = lowDiskThresholdGB
         engine.settings.showDockIcon = showDockIcon
+        engine.settings.minimalMenuBarIcon = minimalMenuBarIcon
         engine.settings.cookieBrowserPreference = cookieBrowserPreference
         engine.settings.pushoverToken = pushoverToken.isEmpty ? nil : pushoverToken
         engine.settings.pushoverUserKey = pushoverUserKey.isEmpty ? nil : pushoverUserKey
         StatusItemController.shared?.refreshActivationPolicy()
+        StatusItemController.shared?.refreshIcon()
 
         engine.log("Settings saved: check \(Int(checkLeadMinutes))min ahead, VOD interval \(vodWaitMinutes)min, notification cooldown \(Int(failureCooldownMinutes))min, download folder: \(customDownloadPath.isEmpty ? "default" : customDownloadPath), low disk warning: \(Int(lowDiskThresholdGB))GB")
     }

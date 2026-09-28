@@ -118,6 +118,12 @@ struct AppSettings: Codable, Equatable {
     /// nil/false = the original behavior (accessory app, briefly becomes regular only
     /// while a window is open, for keyboard focus — see StatusItemController).
     var showDockIcon: Bool? = nil
+    /// Whether the menu bar icon stays neutral (monochrome, blends with the menu bar) when
+    /// everything is fine, only turning red/blue for a problem or an active download. nil =
+    /// true (the default, added 28-09-2026 — a permanently green icon for "all good" turned
+    /// out to be more visual noise than useful signal; color is more meaningful reserved for
+    /// the states that actually need attention).
+    var minimalMenuBarIcon: Bool? = nil
     /// Which browser yt-dlp reads YouTube login cookies from: "chrome", "safari", or
     /// nil/anything else for automatic (Chrome if present, else Safari). Explicit so a Mac
     /// with both installed but only logged into one doesn't get the wrong one guessed —
