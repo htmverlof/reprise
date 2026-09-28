@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import ServiceManagement
 
 struct SettingsView: View {
     @ObservedObject private var engine = MonitorEngine.shared
@@ -10,6 +11,8 @@ struct SettingsView: View {
     @State private var customDownloadPath: String
     @State private var lowDiskThresholdGB: Double
     @State private var showDockIcon: Bool
+    @State private var startAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var startAtLoginNote: String?
     @State private var cookieBrowserPreference: String
     @State private var pushoverToken: String
     @State private var pushoverUserKey: String
@@ -147,6 +150,17 @@ struct SettingsView: View {
             Toggle("Show icon in Dock", isOn: $showDockIcon)
                 .help("Off (default): menu bar only, no Dock icon. On: also keeps a permanent Dock icon, "
                     + "not just while a window happens to be open.")
+
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Start at login", isOn: $startAtLogin)
+                    .help("Automatically launches Reprise in the background when you log in to your Mac.")
+                    .onChange(of: startAtLogin) { _, wantsEnabled in setStartAtLogin(wantsEnabled) }
+                if let startAtLoginNote {
+                    Text(startAtLoginNote)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.orange)
+                }
+            }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Download location")
@@ -412,6 +426,31 @@ struct SettingsView: View {
         panel.prompt = "Choose"
         if panel.runModal() == .OK, let url = panel.url {
             customDownloadPath = url.path
+        }
+    }
+
+    /// SMAppService.mainApp registers/unregisters Reprise as a Login Item without touching
+    /// any plist by hand — the modern macOS 13+ replacement for the old LaunchAgent-file
+    /// approach, and it shows up correctly in System Settings → General → Login Items.
+    /// Registering can succeed but leave the item in .requiresApproval state (macOS wants
+    /// the user to flip it on themselves in System Settings first) — surfaced here instead
+    /// of silently doing nothing, since a toggle that looks "on" but isn't would be worse
+    /// than not having the feature at all.
+    private func setStartAtLogin(_ wantsEnabled: Bool) {
+        startAtLoginNote = nil
+        do {
+            if wantsEnabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            startAtLoginNote = "Couldn't change this: \(error.localizedDescription)"
+        }
+        let status = SMAppService.mainApp.status
+        startAtLogin = status == .enabled
+        if wantsEnabled && status == .requiresApproval {
+            startAtLoginNote = "Needs approval — open System Settings → General → Login Items and enable Reprise."
         }
     }
 
