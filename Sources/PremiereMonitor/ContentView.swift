@@ -13,6 +13,20 @@ struct ContentView: View {
             || engine.permissionWarnings["external-tools"] != nil
     }
 
+    /// The video list pane used to have a flat .frame(minHeight: 260) regardless of how
+    /// many premieres were tracked — with just 1-2, that left a big blank gap below the
+    /// last row before the log section started (28-09-2026 feedback). Capping its max
+    /// height to roughly what the current rows actually need means VSplitView gives any
+    /// leftover window height to the log pane below instead, which can always use more
+    /// room. Still grows normally up to the original 260 once there's enough content to
+    /// fill it (3+ rows).
+    private var videoListMaxHeight: CGFloat {
+        let header: CGFloat = 56
+        let approxRowHeight: CGFloat = 72
+        let content = header + CGFloat(max(sortedVideos.count, 1)) * approxRowHeight
+        return min(max(content, 160), 260)
+    }
+
     var body: some View {
         if isBlockedByPermissions {
             PermissionGateView()
@@ -107,7 +121,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .frame(minHeight: 260)
+            .frame(minHeight: 160, maxHeight: videoListMaxHeight)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text("Log")
