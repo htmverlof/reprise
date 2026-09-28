@@ -126,25 +126,30 @@ final class StatusItemController: NSObject {
             }
             ctx.setStrokeColor(drawColor.cgColor)
             ctx.setLineWidth(ringWidth)
-            ctx.setLineCap(.round)
+            // .butt (not .round) so the ring's end meets the arrowhead below with a clean
+            // edge instead of a round cap bulging underneath it.
+            ctx.setLineCap(.butt)
             ctx.setLineJoin(.round)
             ctx.strokePath()
 
+            // Filled triangle, not a stroked chevron — a stroked V at this line width with
+            // round caps/joins bulged into a blobby, imprecise shape (28-09-2026 feedback:
+            // "dat pijltje... is echt helemaal niet netjes"). A filled arrowhead reads crisp
+            // at menu bar size, same as the center play-triangle below.
             let endPoint = CGPoint(x: center.x + ringRadius * CGFloat(cos(thetaEnd)), y: center.y + ringRadius * CGFloat(sin(thetaEnd)))
             let tangent = thetaEnd + .pi / 2
-            let chevron: CGFloat = ringWidth * 1.3
+            let arrowLength: CGFloat = ringWidth * 2.6
+            let arrowWidth: CGFloat = ringWidth * 2.1
             ctx.saveGState()
             ctx.translateBy(x: endPoint.x, y: endPoint.y)
             ctx.rotate(by: CGFloat(tangent))
             ctx.beginPath()
-            ctx.move(to: CGPoint(x: -chevron * 0.9, y: chevron))
-            ctx.addLine(to: CGPoint(x: chevron * 0.5, y: 0))
-            ctx.addLine(to: CGPoint(x: -chevron * 0.9, y: -chevron))
-            ctx.setStrokeColor(drawColor.cgColor)
-            ctx.setLineWidth(ringWidth)
-            ctx.setLineCap(.round)
-            ctx.setLineJoin(.round)
-            ctx.strokePath()
+            ctx.move(to: CGPoint(x: arrowLength * 0.62, y: 0))
+            ctx.addLine(to: CGPoint(x: -arrowLength * 0.38, y: arrowWidth * 0.5))
+            ctx.addLine(to: CGPoint(x: -arrowLength * 0.38, y: -arrowWidth * 0.5))
+            ctx.closePath()
+            ctx.setFillColor(drawColor.cgColor)
+            ctx.fillPath()
             ctx.restoreGState()
 
             let R: CGFloat = canvas * 0.20
