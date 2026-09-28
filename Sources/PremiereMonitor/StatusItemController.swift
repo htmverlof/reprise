@@ -109,8 +109,11 @@ final class StatusItemController: NSObject {
         image.lockFocus()
         if let ctx = NSGraphicsContext.current?.cgContext {
             let center = CGPoint(x: canvas / 2, y: canvas / 2)
-            let ringRadius: CGFloat = canvas * 0.30
-            let ringWidth: CGFloat = canvas * 0.10
+            // Was 0.30/0.10 (ring) — left ~30% of the canvas as empty padding, which read as
+            // noticeably smaller than neighboring menu bar icons (28-09-2026 feedback). Bigger
+            // ring and thicker stroke fill the same 18x18 box more fully instead.
+            let ringRadius: CGFloat = canvas * 0.38
+            let ringWidth: CGFloat = canvas * 0.135
             let thetaStart = -60.0 * .pi / 180
             let thetaEnd = 240.0 * .pi / 180
             let steps = 200
@@ -144,7 +147,7 @@ final class StatusItemController: NSObject {
             ctx.strokePath()
             ctx.restoreGState()
 
-            let R: CGFloat = canvas * 0.155
+            let R: CGFloat = canvas * 0.20
             ctx.beginPath()
             ctx.move(to: CGPoint(x: center.x + R, y: center.y))
             ctx.addLine(to: CGPoint(x: center.x - R * 0.5, y: center.y + R * 0.866))
