@@ -49,6 +49,13 @@ if [ -f "$APP/Contents/MacOS/$EXECUTABLE_NAME" ]; then
 fi
 cp .build/release/Reprise "$APP/Contents/MacOS/$EXECUTABLE_NAME"
 
+# Keep only the 2 most recent backups — same unbounded-growth issue as the
+# self-update's app-level backups (28-09-2026), just worse here since a local
+# dev rebuild does this every run. Sorted by the timestamp embedded in the
+# name (sort -r), not mtime (ls -t) — mtime turned out to not reliably match
+# creation order for these files.
+ls "$APP/Contents/MacOS/$EXECUTABLE_NAME".backup-* 2>/dev/null | sort -r | tail -n +3 | xargs rm -f
+
 # Falls back to ad-hoc signing on a machine that doesn't have this identity yet (e.g. a
 # fresh clone on another Mac) instead of hard-failing — codesign errors out entirely if
 # asked to sign with a name it can't find in any keychain. Ad-hoc still works, it just

@@ -1564,6 +1564,13 @@ final class MonitorEngine: ObservableObject {
                 mv "/Applications/Reprise.app" "/Applications/Reprise.app.backup-$TS"
             fi
             mv "\(newAppPath.path)" "/Applications/Reprise.app"
+            # Keep only the 2 most recent backups — otherwise every update leaves
+            # another full app bundle behind forever (28-09-2026: found 3+ piled up
+            # in /Applications after repeated update testing). Still a rollback
+            # trail, just a bounded one instead of unbounded growth. Sorted by the
+            # timestamp embedded in the name (sort -r), not mtime (ls -t) — mtime
+            # turned out to not reliably match creation order for these directories.
+            ls -d /Applications/Reprise.app.backup-* 2>/dev/null | sort -r | tail -n +3 | xargs rm -rf
             launchctl kickstart -k "gui/$(id -u)/com.media.reprise" 2>/dev/null || open -a "/Applications/Reprise.app"
             rm -rf "\(tempDir.path)"
             """
