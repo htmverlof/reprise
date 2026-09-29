@@ -1610,7 +1610,13 @@ final class MonitorEngine: ObservableObject {
             # trail, just a bounded one instead of unbounded growth. Sorted by the
             # timestamp embedded in the name (sort -r), not mtime (ls -t) — mtime
             # turned out to not reliably match creation order for these directories.
-            ls -d "$BACKUP_DIR"/Reprise.app.backup-* 2>/dev/null | sort -r | tail -n +3 | xargs rm -rf
+            # A `while read` loop, not `xargs rm -rf` — xargs splits on *any*
+            # whitespace by default, and BACKUP_DIR contains a literal space
+            # ("Application Support"), so xargs was silently breaking every path
+            # in half and rm -rf'ing two nonexistent fragments instead of the real
+            # directory (29-09-2026: found 5 backups piled up instead of 2, `rm`
+            # exiting 0 the whole time since -f swallows "no such file").
+            ls -d "$BACKUP_DIR"/Reprise.app.backup-* 2>/dev/null | sort -r | tail -n +3 | while IFS= read -r old; do rm -rf "$old"; done
             launchctl kickstart -k "gui/$(id -u)/com.media.reprise" 2>/dev/null || open -a "/Applications/Reprise.app"
             rm -rf "\(tempDir.path)"
             """
