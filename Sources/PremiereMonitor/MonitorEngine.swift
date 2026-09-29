@@ -1438,22 +1438,9 @@ final class MonitorEngine: ObservableObject {
     /// checked. Read by the About tab; also drives a one-time notification when it changes.
     @Published var updateAvailable: String?
 
-    /// Counted from the release's own "## Added"/"## Fixed"/"## Changed" markdown
-    /// headers (the convention every Reprise release has used) — shown as three small
-    /// stat tiles in the About tab instead of a wall of text, so what's actually in an
-    /// update is scannable at a glance.
-    @Published var updateNotesSummary: UpdateNotesSummary?
-
     /// nil when not downloading; 0...1 while a download is in progress. The About tab
     /// swaps the version label for a progress bar while this is non-nil.
     @Published var updateProgress: Double?
-
-    struct UpdateNotesSummary {
-        let added: Int
-        let fixed: Int
-        let improved: Int
-        var isEmpty: Bool { added == 0 && fixed == 0 && improved == 0 }
-    }
 
     private var lastUpdateCheck: Date?
 
@@ -1468,7 +1455,7 @@ final class MonitorEngine: ObservableObject {
         guard let url = URL(string: "https://api.github.com/repos/reprise-labs/reprise/releases/latest") else { return }
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
-        let result: (tag: String, body: String)? = await withCheckedContinuation { continuation in
+        let latestTag: String? = await withCheckedContinuation { continuation in
             URLSession.shared.dataTask(with: request) { data, response, error in
                 guard let data, error == nil,
                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -1476,20 +1463,18 @@ final class MonitorEngine: ObservableObject {
                     continuation.resume(returning: nil)
                     return
                 }
-                continuation.resume(returning: (tag, json["body"] as? String ?? ""))
+                continuation.resume(returning: tag)
             }.resume()
         }
 
-        guard let result else {
+        guard let latestTag else {
             log("· Could not check for Reprise updates (GitHub unreachable or rate-limited).")
             return
         }
-        let latestTag = result.tag
 
         if isVersion(latestTag, newerThan: currentVersion) {
             let wasAlreadyKnown = updateAvailable == latestTag
             updateAvailable = latestTag
-            updateNotesSummary = Self.parseUpdateNotes(result.body)
             log("⬆️ Reprise \(latestTag) is available — you have \(currentVersion). See About in Settings.")
             if !wasAlreadyKnown {
                 notify(title: "Reprise update available",
@@ -1497,44 +1482,8 @@ final class MonitorEngine: ObservableObject {
             }
         } else {
             updateAvailable = nil
-            updateNotesSummary = nil
             log("✅ Reprise is up to date (\(currentVersion)).")
         }
-    }
-
-    /// Counts bullet points ("- ...") under each "## Added"/"## Fixed"/"## Changed"
-    /// section of a release's markdown notes. Headers are matched loosely (substring,
-    /// case-insensitive) since past releases have used "Changed" for what's really an
-    /// improvement, not just "Added"/"Fixed" — anything not matching one of the three
-    /// buckets is simply not counted, not misfiled.
-    private static func parseUpdateNotes(_ body: String) -> UpdateNotesSummary {
-        enum Bucket { case none, added, fixed, improved }
-        var bucket = Bucket.none
-        var added = 0, fixed = 0, improved = 0
-
-        for rawLine in body.split(separator: "\n", omittingEmptySubsequences: false) {
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            if line.hasPrefix("## ") {
-                let header = line.dropFirst(3).lowercased()
-                if header.contains("add") || header.contains("new") {
-                    bucket = .added
-                } else if header.contains("fix") {
-                    bucket = .fixed
-                } else if header.contains("change") || header.contains("improve") {
-                    bucket = .improved
-                } else {
-                    bucket = .none
-                }
-            } else if line.hasPrefix("- ") {
-                switch bucket {
-                case .added: added += 1
-                case .fixed: fixed += 1
-                case .improved: improved += 1
-                case .none: break
-                }
-            }
-        }
-        return UpdateNotesSummary(added: added, fixed: fixed, improved: improved)
     }
 
     /// Plain numeric dotted-version comparison ("1.10.0" > "1.9.0") — a string compare

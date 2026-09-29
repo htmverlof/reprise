@@ -333,20 +333,6 @@ struct SettingsView: View {
                         .font(.system(size: 12))
                         .foregroundStyle(.orange)
 
-                    if let summary = engine.updateNotesSummary, !summary.isEmpty {
-                        HStack(spacing: 8) {
-                            if summary.added > 0 {
-                                updateStatTile(count: summary.added, label: "New", systemImage: "plus.circle.fill", color: .blue)
-                            }
-                            if summary.fixed > 0 {
-                                updateStatTile(count: summary.fixed, label: "Fixed", systemImage: "wrench.fill", color: .red)
-                            }
-                            if summary.improved > 0 {
-                                updateStatTile(count: summary.improved, label: "Improved", systemImage: "slider.horizontal.3", color: .purple)
-                            }
-                        }
-                    }
-
                     HStack(spacing: 10) {
                         Button {
                             confirmInstallUpdate(version: updateAvailable)
@@ -518,22 +504,6 @@ struct SettingsView: View {
         } else {
             updateCheckResult = "You're on the latest version (\(engine.currentVersion))."
         }
-    }
-
-    private func updateStatTile(count: Int, label: String, systemImage: String, color: Color) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: systemImage)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(color)
-            Text("\(count)")
-                .font(.system(size: 13, weight: .bold))
-            Text(label)
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func confirmInstallUpdate(version: String) {
