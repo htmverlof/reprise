@@ -1531,26 +1531,22 @@ final class MonitorEngine: ObservableObject {
         updateProgress = 0
         defer { updateProgress = nil }
         do {
-            let (bytes, response) = try await URLSession.shared.bytes(from: url)
-            guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-                return (false, "Download failed: unexpected server response.")
+            // A delegate-based download task instead of URLSession.bytes(from:) — the
+            // latter only exposes a byte-by-byte AsyncSequence, and MonitorEngine being
+            // @MainActor meant iterating a multi-megabyte response one byte at a time ran
+            // on the main actor for the whole download. The delegate's own progress
+            // callback also reports real bytes-written/expected from URLSession itself,
+            // so it doesn't go blank when a response has no Content-Length header (which
+            // the old byte-counting approach did — stuck at 0% then straight to 100%).
+            let downloadedFile = try await Self.download(from: url) { [weak self] progress in
+                Task { @MainActor in self?.updateProgress = progress }
             }
-            let expectedLength = http.expectedContentLength
-            var data = Data()
-            if expectedLength > 0 { data.reserveCapacity(Int(expectedLength)) }
-            // Updating @Published on every single byte would be both wasteful and way
-            // more UI churn than the progress bar needs — every 16KB is plenty smooth.
-            var receivedSinceUpdate = 0
-            for try await byte in bytes {
-                data.append(byte)
-                receivedSinceUpdate += 1
-                if expectedLength > 0, receivedSinceUpdate >= 16384 {
-                    updateProgress = Double(data.count) / Double(expectedLength)
-                    receivedSinceUpdate = 0
-                }
+            defer { try? FileManager.default.removeItem(at: downloadedFile) }
+            guard FileManager.default.fileExists(atPath: downloadedFile.path) else {
+                return (false, "Download failed: no file was written.")
             }
+            try FileManager.default.moveItem(at: downloadedFile, to: zipPath)
             updateProgress = 1.0
-            try data.write(to: zipPath)
         } catch {
             return (false, "Download failed: \(error.localizedDescription)")
         }
@@ -1587,9 +1583,25 @@ final class MonitorEngine: ObservableObject {
             # folders mixed in with actual apps in Finder was confusing, even
             # capped at 2). Same rollback safety net, just out of the way.
             BACKUP_DIR="$HOME/Library/Application Support/Reprise/Backups"
-            mkdir -p "$BACKUP_DIR"
+            # Both mkdir and the mv below are checked explicitly — if either fails
+            # silently, the next line would move the new app *inside* the still-there
+            # old Reprise.app instead of replacing it (nesting Reprise.app/Reprise.app),
+            # leaving the app quit with the swap half-done instead of just failing
+            # cleanly and leaving the old version running.
+            if ! mkdir -p "$BACKUP_DIR"; then
+                exit 1
+            fi
+            # Sweeps up any old-format backups from the 1.4.5/1.4.6 versions of this
+            # script, which put them directly in /Applications — otherwise anyone who
+            # updated through that window keeps that clutter forever, since this script
+            # only ever looks inside BACKUP_DIR from here on.
+            for old in /Applications/Reprise.app.backup-*; do
+                [ -d "$old" ] && mv "$old" "$BACKUP_DIR/" 2>/dev/null
+            done
             if [ -d "/Applications/Reprise.app" ]; then
-                mv "/Applications/Reprise.app" "$BACKUP_DIR/Reprise.app.backup-$TS"
+                if ! mv "/Applications/Reprise.app" "$BACKUP_DIR/Reprise.app.backup-$TS"; then
+                    exit 1
+                fi
             fi
             mv "\(newAppPath.path)" "/Applications/Reprise.app"
             # Keep only the 2 most recent backups — otherwise every update leaves
@@ -1625,6 +1637,25 @@ final class MonitorEngine: ObservableObject {
         return (true, "Installing \(tag) — Reprise will quit and reopen automatically.")
     }
 
+    /// Downloads `url` to a temp file via a delegate-based download task, reporting
+    /// fractional progress as URLSession itself tracks it (not by counting bytes off an
+    /// AsyncSequence by hand, which forced iterating byte-by-byte on this @MainActor
+    /// class). Returns the temp file's location; the caller is responsible for moving or
+    /// deleting it.
+    private static func download(from url: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+        try await withCheckedThrowingContinuation { continuation in
+            let delegate = DownloadProgressDelegate(onProgress: progress) { result in
+                continuation.resume(with: result)
+            }
+            let session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
+            // The delegate holds the session (not the other way around) so nothing external
+            // needs to keep either alive for the download's duration — delegate.finish(_:)
+            // nils this out afterward to release both once the task is done.
+            delegate.session = session
+            session.downloadTask(with: url).resume()
+        }
+    }
+
     private func tick() async {
         // Vóór de guard: deze mag ook draaien als er (nog) geen video's
         // gevolgd worden. checkYtDlpVersion() remt zichzelf af tot 1x/dag.
@@ -1639,5 +1670,61 @@ final class MonitorEngine: ObservableObject {
             await checkOneVideo(index: index)
         }
         Store.save(videos)
+    }
+}
+
+/// Backs `MonitorEngine.download(from:progress:)`. Deliberately *not* @MainActor — the
+/// URLSessionDownloadDelegate callbacks arrive on an arbitrary background queue, not the
+/// main actor, so this stays a plain NSObject with its own lock guarding the
+/// call-onFinish-exactly-once invariant (didCompleteWithError fires after
+/// didFinishDownloadingTo even on success, with a nil error, so without that guard a
+/// successful download could resume the continuation twice).
+private final class DownloadProgressDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    var session: URLSession?
+
+    private let onProgress: @Sendable (Double) -> Void
+    private let onFinish: @Sendable (Result<URL, Error>) -> Void
+    private let lock = NSLock()
+    private var didFinish = false
+
+    init(onProgress: @escaping @Sendable (Double) -> Void, onFinish: @escaping @Sendable (Result<URL, Error>) -> Void) {
+        self.onProgress = onProgress
+        self.onFinish = onFinish
+    }
+
+    func urlSession(
+        _ session: URLSession, downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64
+    ) {
+        guard totalBytesExpectedToWrite > 0 else { return }
+        onProgress(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        // Must move the file synchronously here — URLSession deletes whatever's at
+        // `location` as soon as this delegate method returns.
+        let dest = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".zip")
+        do {
+            try FileManager.default.moveItem(at: location, to: dest)
+            finish(.success(dest))
+        } catch {
+            finish(.failure(error))
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error {
+            finish(.failure(error))
+        }
+    }
+
+    private func finish(_ result: Result<URL, Error>) {
+        lock.lock()
+        let alreadyFinished = didFinish
+        didFinish = true
+        lock.unlock()
+        guard !alreadyFinished else { return }
+        onFinish(result)
+        session = nil
     }
 }
