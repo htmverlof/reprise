@@ -1501,10 +1501,11 @@ final class MonitorEngine: ObservableObject {
     /// still executing is fragile; letting a detached script do it after this process is
     /// gone is the standard approach, same idea Sparkle and other updaters use).
     ///
-    /// The old app bundle is renamed aside (Reprise.app.backup-<timestamp>), not deleted —
-    /// same "never destroy without a way back" pattern install.sh already uses for the
-    /// executable. Relaunches via `launchctl kickstart` on the LaunchAgent, not a plain
-    /// `open`, so the auto-restart-on-crash supervision (KeepAlive) stays attached to the
+    /// The old app bundle is moved aside into `~/Library/Application Support/Reprise/
+    /// Backups/` (not /Applications — mixed in with real apps in Finder was confusing),
+    /// not deleted — same "never destroy without a way back" pattern install.sh already
+    /// uses for the executable. Relaunches via `launchctl kickstart` on the LaunchAgent, not
+    /// a plain `open`, so the auto-restart-on-crash supervision (KeepAlive) stays attached to the
     /// new process instead of silently going stale until the next login.
     func downloadAndInstallUpdate() async -> (ok: Bool, message: String) {
         guard let tag = updateAvailable else {
@@ -1560,8 +1561,14 @@ final class MonitorEngine: ObservableObject {
             #!/bin/bash
             sleep 1
             TS=$(date +%Y%m%d-%H%M%S)
+            # Backups live in Application Support, not next to real apps in
+            # /Applications (29-09-2026 feedback: seeing "Reprise.app.backup-…"
+            # folders mixed in with actual apps in Finder was confusing, even
+            # capped at 2). Same rollback safety net, just out of the way.
+            BACKUP_DIR="$HOME/Library/Application Support/Reprise/Backups"
+            mkdir -p "$BACKUP_DIR"
             if [ -d "/Applications/Reprise.app" ]; then
-                mv "/Applications/Reprise.app" "/Applications/Reprise.app.backup-$TS"
+                mv "/Applications/Reprise.app" "$BACKUP_DIR/Reprise.app.backup-$TS"
             fi
             mv "\(newAppPath.path)" "/Applications/Reprise.app"
             # Keep only the 2 most recent backups — otherwise every update leaves
@@ -1570,7 +1577,7 @@ final class MonitorEngine: ObservableObject {
             # trail, just a bounded one instead of unbounded growth. Sorted by the
             # timestamp embedded in the name (sort -r), not mtime (ls -t) — mtime
             # turned out to not reliably match creation order for these directories.
-            ls -d /Applications/Reprise.app.backup-* 2>/dev/null | sort -r | tail -n +3 | xargs rm -rf
+            ls -d "$BACKUP_DIR"/Reprise.app.backup-* 2>/dev/null | sort -r | tail -n +3 | xargs rm -rf
             launchctl kickstart -k "gui/$(id -u)/com.media.reprise" 2>/dev/null || open -a "/Applications/Reprise.app"
             rm -rf "\(tempDir.path)"
             """
