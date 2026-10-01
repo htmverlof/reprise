@@ -4,8 +4,38 @@ import AppKit
 struct ContentView: View {
     @ObservedObject private var engine = MonitorEngine.shared
 
+    /// Which half of the (formerly single, now tabbed) top pane is showing — split out
+    /// 01-10-2026 because the old single "Found on watched channels" banner pushed the
+    /// tracked list down every time a channel found something, instead of living in its
+    /// own clearly-separate place.
+    private enum MainSection { case tracked, upcoming }
+    @State private var selectedSection: MainSection = .tracked
+
     private var sortedVideos: [MonitoredVideo] {
         engine.videos.sorted { $0.scheduledDate < $1.scheduledDate }
+    }
+
+    @ViewBuilder
+    private func sectionTabButton(_ section: MainSection, title: String, badgeCount: Int?) -> some View {
+        Button {
+            selectedSection = section
+        } label: {
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(.title2).bold()
+                    .foregroundStyle(selectedSection == section ? Color.primary : Color.secondary)
+                if let badgeCount, badgeCount > 0 {
+                    Text("\(badgeCount)")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(Color.red)
+                        .clipShape(Capsule())
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private var isBlockedByPermissions: Bool {
@@ -23,7 +53,8 @@ struct ContentView: View {
     private var videoListMaxHeight: CGFloat {
         let header: CGFloat = 56
         let approxRowHeight: CGFloat = 72
-        let content = header + CGFloat(max(sortedVideos.count, 1)) * approxRowHeight
+        let rowCount = selectedSection == .tracked ? sortedVideos.count : engine.discoveredVideos.count
+        let content = header + CGFloat(max(rowCount, 1)) * approxRowHeight
         return min(max(content, 160), 260)
     }
 
@@ -39,9 +70,9 @@ struct ContentView: View {
     private var mainContent: some View {
         VSplitView {
             VStack(spacing: 0) {
-                HStack {
-                    Text("Tracked premieres")
-                        .font(.title2).bold()
+                HStack(spacing: 18) {
+                    sectionTabButton(.tracked, title: "Tracked", badgeCount: nil)
+                    sectionTabButton(.upcoming, title: "Upcoming", badgeCount: engine.discoveredVideos.count)
                     Spacer()
                     Button {
                         engine.openDownloadFolder()
@@ -101,61 +132,67 @@ struct ContentView: View {
                     .padding(.top, 8)
                 }
 
-                if !engine.discoveredVideos.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Found on watched channels")
-                            .font(.caption).bold()
-                            .foregroundStyle(.secondary)
-                        ForEach(engine.discoveredVideos) { discovered in
-                            HStack(alignment: .top, spacing: 8) {
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text(discovered.title)
-                                        .font(.system(size: 12, weight: .medium))
-                                        .lineLimit(1)
-                                    Text(discovered.channelName)
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.secondary)
+                if selectedSection == .tracked {
+                    if sortedVideos.isEmpty {
+                        ContentUnavailableView(
+                            "No premieres yet",
+                            systemImage: "video.badge.plus",
+                            description: Text("Click Add to track a YouTube premiere.")
+                        )
+                        .frame(maxHeight: .infinity)
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 0) {
+                                ForEach(sortedVideos) { video in
+                                    VideoRow(video: video, onDelete: { confirmDelete(video) })
+                                    Divider()
                                 }
-                                Spacer()
-                                Button("Dismiss") {
-                                    engine.dismissDiscovered(discovered)
-                                }
-                                .buttonStyle(.plain)
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                                Button("Add") {
-                                    Task { await engine.addDiscovered(discovered) }
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.small)
                             }
+                            .padding(.horizontal)
+                            .padding(.top, 4)
                         }
                     }
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.accentColor.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-                }
-
-                if sortedVideos.isEmpty {
-                    ContentUnavailableView(
-                        "No premieres yet",
-                        systemImage: "video.badge.plus",
-                        description: Text("Click Add to track a YouTube premiere.")
-                    )
-                    .frame(maxHeight: .infinity)
                 } else {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(sortedVideos) { video in
-                                VideoRow(video: video, onDelete: { confirmDelete(video) })
-                                Divider()
+                    if engine.discoveredVideos.isEmpty {
+                        ContentUnavailableView(
+                            "No new premieres found",
+                            systemImage: "antenna.radiowaves.left.and.right",
+                            description: Text("Reprise checks your watched channels once a day.")
+                        )
+                        .frame(maxHeight: .infinity)
+                    } else {
+                        ScrollView {
+                            LazyVStack(spacing: 0) {
+                                ForEach(engine.discoveredVideos) { discovered in
+                                    HStack(alignment: .top, spacing: 8) {
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(discovered.title)
+                                                .font(.system(size: 13, weight: .medium))
+                                                .lineLimit(1)
+                                            Text(discovered.channelName)
+                                                .font(.system(size: 11))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Button("Dismiss") {
+                                            engine.dismissDiscovered(discovered)
+                                        }
+                                        .buttonStyle(.plain)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                        Button("Add") {
+                                            Task { await engine.addDiscovered(discovered) }
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                        .controlSize(.small)
+                                    }
+                                    .padding(.vertical, 8)
+                                    Divider()
+                                }
                             }
+                            .padding(.horizontal)
+                            .padding(.top, 4)
                         }
-                        .padding(.horizontal)
-                        .padding(.top, 4)
                     }
                 }
             }
