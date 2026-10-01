@@ -588,41 +588,60 @@ final class MonitorEngine: ObservableObject {
         guard !channels.isEmpty else { return }
 
         for index in channels.indices {
-            let channel = channels[index]
-            let base = channel.url.hasSuffix("/") ? String(channel.url.dropLast()) : channel.url
-            let streamsUrl = base + "/streams"
-            let (_, out, err) = await runProcess(ytDlpPath, ["--flat-playlist", "-J", streamsUrl])
-
-            guard let data = out.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                if !err.contains("does not have a streams tab") {
-                    log("⚠️ Could not check channel \(channel.name ?? channel.url): \(tail(err))")
-                }
-                continue
-            }
-
-            if let channelName = json["channel"] as? String {
-                channels[index].name = channelName
-            }
-            let entries = (json["entries"] as? [[String: Any]]) ?? []
-            let upcoming = entries.filter { ($0["live_status"] as? String) == "is_upcoming" }
-            let upcomingIDs = Set(upcoming.compactMap { $0["id"] as? String })
-
-            let newIDs = upcomingIDs.subtracting(channels[index].knownUpcomingIDs)
-            for entry in upcoming where newIDs.contains(entry["id"] as? String ?? "") {
-                guard let videoID = entry["id"] as? String else { continue }
-                let title = entry["title"] as? String ?? videoID
-                discoveredVideos.append(DiscoveredVideo(
-                    videoID: videoID, title: title,
-                    channelName: channels[index].name ?? channel.url, channelId: channel.id
-                ))
-                log("📡 New premiere found on \(channels[index].name ?? channel.url): \(title)")
-            }
-            channels[index].knownUpcomingIDs = Array(upcomingIDs)
-            channels[index].lastChecked = Date()
+            await checkOneChannel(index: index)
         }
         Store.saveChannels(channels)
         Store.saveDiscovered(discoveredVideos)
+    }
+
+    /// Checks a single channel right away, bypassing the once-a-day throttle — the
+    /// Channels settings tab's per-row "check now" button (01-10-2026), for when you
+    /// don't want to wait up to a day to find out if a just-watched channel has
+    /// anything new.
+    func checkChannelNow(_ channel: TrackedChannel) {
+        guard let index = channels.firstIndex(where: { $0.id == channel.id }) else { return }
+        Task {
+            await checkOneChannel(index: index)
+            Store.saveChannels(channels)
+            Store.saveDiscovered(discoveredVideos)
+        }
+    }
+
+    private func checkOneChannel(index: Int) async {
+        let channel = channels[index]
+        let base = channel.url.hasSuffix("/") ? String(channel.url.dropLast()) : channel.url
+        let streamsUrl = base + "/streams"
+        let (_, out, err) = await runProcess(ytDlpPath, ["--flat-playlist", "-J", streamsUrl])
+
+        guard let data = out.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            if !err.contains("does not have a streams tab") {
+                log("⚠️ Could not check channel \(channel.name ?? channel.url): \(tail(err))")
+            } else {
+                channels[index].lastChecked = Date()
+            }
+            return
+        }
+
+        if let channelName = json["channel"] as? String {
+            channels[index].name = channelName
+        }
+        let entries = (json["entries"] as? [[String: Any]]) ?? []
+        let upcoming = entries.filter { ($0["live_status"] as? String) == "is_upcoming" }
+        let upcomingIDs = Set(upcoming.compactMap { $0["id"] as? String })
+
+        let newIDs = upcomingIDs.subtracting(channels[index].knownUpcomingIDs)
+        for entry in upcoming where newIDs.contains(entry["id"] as? String ?? "") {
+            guard let videoID = entry["id"] as? String else { continue }
+            let title = entry["title"] as? String ?? videoID
+            discoveredVideos.append(DiscoveredVideo(
+                videoID: videoID, title: title,
+                channelName: channels[index].name ?? channel.url, channelId: channel.id
+            ))
+            log("📡 New premiere found on \(channels[index].name ?? channel.url): \(title)")
+        }
+        channels[index].knownUpcomingIDs = Array(upcomingIDs)
+        channels[index].lastChecked = Date()
     }
 
     /// Clears finished premieres from the tracked list. Only the list entry goes —

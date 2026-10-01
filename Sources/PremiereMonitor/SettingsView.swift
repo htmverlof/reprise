@@ -88,6 +88,13 @@ struct SettingsView: View {
                                 .font(.system(size: 15))
                             Text(tab.rawValue)
                                 .font(.system(size: 12))
+                                // Was wrapping "Notifications" onto its own second line once
+                                // the Channels tab brought the total to 6 — each tab's share of
+                                // the fixed-width strip got too narrow for its longest label at
+                                // 12pt (01-10-2026). Shrinking instead of wrapping keeps every
+                                // tab's label on one line regardless of how many tabs there are.
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
@@ -267,6 +274,13 @@ struct SettingsView: View {
                                 }
                             }
                             Spacer()
+                            Button {
+                                engine.checkChannelNow(channel)
+                            } label: {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                            }
+                            .buttonStyle(.plain)
+                            .help("Check this channel now")
                             Button {
                                 engine.removeChannel(channel)
                             } label: {
