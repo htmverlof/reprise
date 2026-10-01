@@ -21,6 +21,8 @@ enum Store {
     static let logFile = appSupportDir.appendingPathComponent("premieres.log")
     static let lockFile = appSupportDir.appendingPathComponent("encore.lock")
     static let settingsFile = appSupportDir.appendingPathComponent("settings.json")
+    static let channelsFile = appSupportDir.appendingPathComponent("channels.json")
+    static let discoveredFile = appSupportDir.appendingPathComponent("discovered.json")
 
     private static var lockFileDescriptor: Int32 = -1
 
@@ -101,6 +103,30 @@ enum Store {
     static func saveSettings(_ settings: AppSettings) {
         guard let data = try? JSONEncoder().encode(settings) else { return }
         try? data.write(to: settingsFile, options: .atomic)
+    }
+
+    static func loadChannels() -> [TrackedChannel] {
+        guard let data = try? Data(contentsOf: channelsFile) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return (try? decoder.decode([TrackedChannel].self, from: data)) ?? []
+    }
+
+    static func saveChannels(_ channels: [TrackedChannel]) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(channels) else { return }
+        try? data.write(to: channelsFile, options: .atomic)
+    }
+
+    static func loadDiscovered() -> [DiscoveredVideo] {
+        guard let data = try? Data(contentsOf: discoveredFile) else { return [] }
+        return (try? JSONDecoder().decode([DiscoveredVideo].self, from: data)) ?? []
+    }
+
+    static func saveDiscovered(_ discovered: [DiscoveredVideo]) {
+        guard let data = try? JSONEncoder().encode(discovered) else { return }
+        try? data.write(to: discoveredFile, options: .atomic)
     }
 
     /// Generous for a text log fed by 30-second-interval checks — this caps premieres.log

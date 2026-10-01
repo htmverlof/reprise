@@ -101,6 +101,44 @@ struct ContentView: View {
                     .padding(.top, 8)
                 }
 
+                if !engine.discoveredVideos.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Found on watched channels")
+                            .font(.caption).bold()
+                            .foregroundStyle(.secondary)
+                        ForEach(engine.discoveredVideos) { discovered in
+                            HStack(alignment: .top, spacing: 8) {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(discovered.title)
+                                        .font(.system(size: 12, weight: .medium))
+                                        .lineLimit(1)
+                                    Text(discovered.channelName)
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button("Dismiss") {
+                                    engine.dismissDiscovered(discovered)
+                                }
+                                .buttonStyle(.plain)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                                Button("Add") {
+                                    Task { await engine.addDiscovered(discovered) }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.accentColor.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                }
+
                 if sortedVideos.isEmpty {
                     ContentUnavailableView(
                         "No premieres yet",

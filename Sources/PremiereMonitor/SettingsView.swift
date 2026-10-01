@@ -20,6 +20,8 @@ struct SettingsView: View {
     @State private var showPushoverToken = false
     @State private var showPushoverUserKey = false
 
+    @State private var newChannelURL = ""
+
     @State private var isTestingNotification = false
     @State private var notificationTestResult: String?
     @State private var notificationTestSucceeded = false
@@ -29,13 +31,14 @@ struct SettingsView: View {
     @State private var cookieTestSucceeded = false
 
     private enum SettingsTab: String, CaseIterable {
-        case general = "General", monitoring = "Monitoring", cookies = "Cookies", notifications = "Notifications",
-             about = "About"
+        case general = "General", monitoring = "Monitoring", channels = "Channels", cookies = "Cookies",
+             notifications = "Notifications", about = "About"
 
         var icon: String {
             switch self {
             case .general: return "gearshape"
             case .monitoring: return "clock"
+            case .channels: return "person.2"
             case .cookies: return "globe"
             case .notifications: return "bell"
             case .about: return "info.circle"
@@ -107,6 +110,7 @@ struct SettingsView: View {
                     switch selectedTab {
                     case .general: generalTab
                     case .monitoring: monitoringTab
+                    case .channels: channelsTab
                     case .cookies: cookiesTab
                     case .notifications: notificationsTab
                     case .about: aboutTab
@@ -220,6 +224,70 @@ struct SettingsView: View {
                     Text("\(Int(lowDiskThresholdGB)) GB")
                 }
             }
+        }
+    }
+
+    private var channelsTab: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Watch a channel for new premieres")
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+                Text("Checked once a day. Found premieres show up in the main window for you "
+                    + "to add with one click — no need to go find the URL on YouTube yourself.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                HStack {
+                    TextField("Channel URL or @handle", text: $newChannelURL)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(addChannel)
+                    Button("Add", action: addChannel)
+                        .disabled(newChannelURL.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+
+            if engine.channels.isEmpty {
+                Text("No channels watched yet.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(engine.channels) { channel in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(channel.name ?? channel.url)
+                                    .font(.system(size: 13, weight: .medium))
+                                if let lastChecked = channel.lastChecked {
+                                    Text("Last checked \(lastChecked.formatted(date: .abbreviated, time: .shortened))")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Text("Not checked yet")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer()
+                            Button {
+                                engine.removeChannel(channel)
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.plain)
+                            .help("Stop watching this channel")
+                        }
+                        .padding(.vertical, 6)
+                        Divider()
+                    }
+                }
+            }
+        }
+    }
+
+    private func addChannel() {
+        let trimmed = newChannelURL.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        if engine.addChannel(url: trimmed) {
+            newChannelURL = ""
         }
     }
 

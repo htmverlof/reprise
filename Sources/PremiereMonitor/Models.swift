@@ -97,6 +97,34 @@ func formattedCountdown(to date: Date) -> String {
     return "in \(minutes)m"
 }
 
+/// A YouTube channel Reprise checks daily for newly scheduled premieres — the
+/// user's "watch this channel for upcoming stuff" idea (30-09-2026), so they
+/// don't have to go find+paste each premiere URL themselves.
+struct TrackedChannel: Identifiable, Codable, Equatable {
+    var id: UUID = UUID()
+    /// Whatever the user entered: a full URL, an @handle, or a bare handle.
+    var url: String
+    /// Resolved from yt-dlp once the channel's been checked at least once; nil until then.
+    var name: String?
+    /// Upcoming-video IDs already seen on this channel, so the next check only
+    /// surfaces genuinely new ones instead of re-reporting the same premiere
+    /// every day until it airs.
+    var knownUpcomingIDs: [String] = []
+    var lastChecked: Date? = nil
+}
+
+/// A premiere found on a tracked channel that isn't in the main list yet — sits
+/// here until the user adds it (or dismisses it) from the Discovered section.
+struct DiscoveredVideo: Identifiable, Codable, Equatable {
+    var id: String { videoID }
+    var videoID: String
+    var title: String
+    var channelName: String
+    var channelId: UUID
+
+    var url: String { "https://www.youtube.com/watch?v=\(videoID)" }
+}
+
 struct AppSettings: Codable, Equatable {
     /// How many minutes before the scheduled time we start checking.
     var checkLeadMinutes: Double = 15

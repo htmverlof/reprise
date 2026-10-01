@@ -9,6 +9,8 @@ final class MonitorEngine: ObservableObject {
     static let shared = MonitorEngine()
 
     @Published var videos: [MonitoredVideo]
+    @Published var channels: [TrackedChannel]
+    @Published var discoveredVideos: [DiscoveredVideo]
     @Published var logLines: [String] = []
     @Published var downloadProgress: [UUID: String] = [:]
     @Published var settings: AppSettings {
@@ -60,6 +62,8 @@ final class MonitorEngine: ObservableObject {
     init() {
         self.settings = Store.loadSettings()
         self.videos = Store.load()
+        self.channels = Store.loadChannels()
+        self.discoveredVideos = Store.loadDiscovered()
         log("Reprise started. Download folder: \(downloadRoot.path)")
         checkDownloadFolderWritable()
         checkCookieBrowserAccess()
@@ -512,6 +516,113 @@ final class MonitorEngine: ObservableObject {
         videos.removeAll { $0.id == video.id }
         Store.save(videos)
         log("Removed: \(video.label)")
+    }
+
+    // MARK: - Channel watching
+
+    /// Adds a channel to watch for newly scheduled premieres. Returns false (and adds
+    /// nothing) if the same URL/handle is already tracked.
+    @discardableResult
+    func addChannel(url: String) -> Bool {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        if channels.contains(where: { $0.url.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed }) {
+            return false
+        }
+        channels.append(TrackedChannel(url: trimmed))
+        Store.saveChannels(channels)
+        log("Now watching channel: \(trimmed)")
+        // Check it right away rather than making the user wait up to a day to find out
+        // whether the URL was even valid.
+        Task { await checkChannels(force: true) }
+        return true
+    }
+
+    func removeChannel(_ channel: TrackedChannel) {
+        channels.removeAll { $0.id == channel.id }
+        discoveredVideos.removeAll { $0.channelId == channel.id }
+        Store.saveChannels(channels)
+        Store.saveDiscovered(discoveredVideos)
+        log("Stopped watching channel: \(channel.name ?? channel.url)")
+    }
+
+    /// Looks up a discovered video the same way the "Add premiere" screen does, adds it
+    /// to the tracked list on success, and removes it from the discovered pile either way
+    /// (a failed lookup here almost always means the premiere already started or was
+    /// pulled — nothing useful to retry).
+    @discardableResult
+    func addDiscovered(_ discovered: DiscoveredVideo) async -> Bool {
+        let result = await lookupVideoInfo(url: discovered.url)
+        let scheduledDate = result.scheduledDate ?? (result.isLiveNow ? Date() : nil)
+        var succeeded = false
+        if let scheduledDate {
+            succeeded = addVideo(url: discovered.url, label: result.title ?? discovered.title, scheduledDate: scheduledDate)
+        } else {
+            log("⚠️ Could not add discovered premiere \"\(discovered.title)\": \(result.errorMessage ?? "no scheduled time found")")
+        }
+        discoveredVideos.removeAll { $0.id == discovered.id }
+        Store.saveDiscovered(discoveredVideos)
+        return succeeded
+    }
+
+    func dismissDiscovered(_ discovered: DiscoveredVideo) {
+        discoveredVideos.removeAll { $0.id == discovered.id }
+        Store.saveDiscovered(discoveredVideos)
+    }
+
+    private var lastChannelCheck: Date?
+
+    /// Once a day (or immediately after adding a channel, via `force`): asks yt-dlp for
+    /// each watched channel's "streams" tab — the one YouTube tab that lists live AND
+    /// upcoming broadcasts together, each already tagged with a `live_status` — so this
+    /// is one flat-playlist request per channel, not one lookup per video. Confirmed
+    /// 01-10-2026 against a 585-video channel: fast, and `live_status` comes back
+    /// populated even in flat-playlist mode for this specific tab.
+    ///
+    /// A channel with nothing live or upcoming right now has *no* streams tab at all —
+    /// yt-dlp then exits non-zero with "This channel does not have a streams tab", which
+    /// is treated as "0 upcoming", not a failure.
+    func checkChannels(force: Bool = false) async {
+        if !force, let last = lastChannelCheck, Date().timeIntervalSince(last) < 86400 { return }
+        lastChannelCheck = Date()
+        guard !channels.isEmpty else { return }
+
+        for index in channels.indices {
+            let channel = channels[index]
+            let base = channel.url.hasSuffix("/") ? String(channel.url.dropLast()) : channel.url
+            let streamsUrl = base + "/streams"
+            let (_, out, err) = await runProcess(ytDlpPath, ["--flat-playlist", "-J", streamsUrl])
+
+            guard let data = out.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                if !err.contains("does not have a streams tab") {
+                    log("⚠️ Could not check channel \(channel.name ?? channel.url): \(tail(err))")
+                }
+                continue
+            }
+
+            if let channelName = json["channel"] as? String {
+                channels[index].name = channelName
+            }
+            let entries = (json["entries"] as? [[String: Any]]) ?? []
+            let upcoming = entries.filter { ($0["live_status"] as? String) == "is_upcoming" }
+            let upcomingIDs = Set(upcoming.compactMap { $0["id"] as? String })
+
+            let newIDs = upcomingIDs.subtracting(channels[index].knownUpcomingIDs)
+            for entry in upcoming where newIDs.contains(entry["id"] as? String ?? "") {
+                guard let videoID = entry["id"] as? String else { continue }
+                let title = entry["title"] as? String ?? videoID
+                discoveredVideos.append(DiscoveredVideo(
+                    videoID: videoID, title: title,
+                    channelName: channels[index].name ?? channel.url, channelId: channel.id
+                ))
+                log("📡 New premiere found on \(channels[index].name ?? channel.url): \(title)")
+            }
+            channels[index].knownUpcomingIDs = Array(upcomingIDs)
+            channels[index].lastChecked = Date()
+        }
+        Store.saveChannels(channels)
+        Store.saveDiscovered(discoveredVideos)
     }
 
     /// Clears finished premieres from the tracked list. Only the list entry goes —
@@ -1666,6 +1777,7 @@ final class MonitorEngine: ObservableObject {
         // Vóór de guard: deze mag ook draaien als er (nog) geen video's
         // gevolgd worden. checkYtDlpVersion() remt zichzelf af tot 1x/dag.
         await checkYtDlpVersion()
+        await checkChannels()
         await checkForUpdates()
         checkDiskSpace()
         checkExternalTools()
