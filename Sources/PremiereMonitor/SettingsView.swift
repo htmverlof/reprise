@@ -397,6 +397,14 @@ struct SettingsView: View {
 
     private var aboutTab: some View {
         VStack(alignment: .leading, spacing: 18) {
+            // Fixed minHeight so the "Links"/"Troubleshooting" sections below don't
+            // jump around as this block's content changes shape (no update → update
+            // available → downloading) — user feedback, 02-10-2026, with screenshots
+            // showing everything below sliding down a different amount per state.
+            // Sized for the tallest real combination (downloading progress + update
+            // banner + button row); the result-text rows reserve their line even when
+            // empty (opacity 0) rather than being added/removed, which is the other
+            // half of what was causing the jump.
             VStack(alignment: .leading, spacing: 6) {
                 if let progress = engine.updateProgress {
                     VStack(alignment: .leading, spacing: 4) {
@@ -432,16 +440,15 @@ struct SettingsView: View {
                              destination: URL(string: "https://github.com/reprise-labs/reprise/releases/tag/\(updateAvailable)")!)
                             .font(.system(size: 12))
                     }
-                    if let installResult {
-                        Text(installResult)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
                 } else if engine.updateProgress == nil {
                     Text("You're on the latest known version.")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
+                Text(installResult ?? " ")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .opacity(installResult == nil ? 0 : 1)
 
                 Button {
                     Task { await checkForUpdatesNow() }
@@ -454,12 +461,12 @@ struct SettingsView: View {
                 }
                 .disabled(isCheckingUpdate)
                 .padding(.top, 4)
-                if let updateCheckResult {
-                    Text(updateCheckResult)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
+                Text(updateCheckResult ?? " ")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .opacity(updateCheckResult == nil ? 0 : 1)
             }
+            .frame(minHeight: 150, alignment: .top)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Links")
