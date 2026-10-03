@@ -341,32 +341,7 @@ final class StatusItemController: NSObject {
             self.settingsWindow = window
         }
         settingsWindow?.contentView = NSHostingView(rootView: SettingsView())
-        // A fresh SettingsView always starts on the General tab (its @State default),
-        // so the window needs to match that on every open — otherwise reopening after
-        // a previous session left it tall for About would show General with a dead
-        // gap until the user happened to touch a tab.
-        resizeSettingsWindow(forAboutTab: false)
         showAuxiliaryWindow(settingsWindow!)
-    }
-
-    // About is the one tab tall enough to need more room than the other five (its
-    // update-available/downloading content plus Links plus Troubleshooting) — at the
-    // shared 480pt height that fits everything else comfortably, About's last button
-    // fell below the fold and forced a scroll for no reason (user feedback,
-    // 03-10-2026). Rather than permanently growing the window for every tab (which
-    // brings back the opposite problem: a dead gap under Notifications, the shortest
-    // tab, that an earlier fix on 29-09-2026 specifically shrank the window to avoid),
-    // only About grows the window, and only while it's selected. Resizes from the
-    // top-left corner (y adjusted opposite of height) so the window grows/shrinks
-    // downward instead of the titlebar jumping.
-    func resizeSettingsWindow(forAboutTab isAboutTab: Bool) {
-        guard let window = settingsWindow else { return }
-        let targetHeight: CGFloat = isAboutTab ? 560 : 480
-        var frame = window.frame
-        guard frame.height != targetHeight else { return }
-        frame.origin.y += frame.height - targetHeight
-        frame.size.height = targetHeight
-        window.setFrame(frame, display: true, animate: true)
     }
 
     private func showAuxiliaryWindow(_ window: NSWindow) {

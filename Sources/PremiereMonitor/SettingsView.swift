@@ -149,17 +149,14 @@ struct SettingsView: View {
             .padding(20)
         }
         .frame(width: 460)
-        // This cap turned out to be a red herring for actual window sizing — the
-        // window itself is a plain NSWindow created with a fixed contentRect
-        // (StatusItemController.showSettingsWindow), so raising this SwiftUI-side
-        // number alone had zero visual effect (found 03-10-2026 while chasing why
-        // About's "Copy log to clipboard" needed a scroll). The real fix lives in
-        // StatusItemController.resizeSettingsWindow, called below on tab change —
-        // this is just a generous ceiling so the ScrollView never fights the window.
-        .frame(maxHeight: 560)
-        .onChange(of: selectedTab) { _, newValue in
-            StatusItemController.shared?.resizeSettingsWindow(forAboutTab: newValue == .about)
-        }
+        // Was a flat 640 regardless of which tab was showing, so a short tab (e.g.
+        // Notifications) left a large dead gap above Close/Save. Each tab has its own
+        // ScrollView, so this is just a comfortable cap that every tab's content needs
+        // to fit inside — including About, which is why its own spacing was tightened
+        // (12pt instead of 18pt between sections) rather than growing the window just
+        // for that one tab (tried that on 03-10-2026, reverted: it worked but was more
+        // moving parts than this needed for one tab's worth of extra content).
+        .frame(maxHeight: 480)
     }
 
     private var generalTab: some View {
@@ -410,7 +407,7 @@ struct SettingsView: View {
     }
 
     private var aboutTab: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 12) {
             // Fixed minHeight so the "Links"/"Troubleshooting" sections below don't
             // jump around as this block's content changes shape (no update → update
             // available → downloading) — user feedback, 02-10-2026, with screenshots
