@@ -123,6 +123,14 @@ struct SettingsView: View {
                     case .about: aboutTab
                     }
                 }
+                // Without this, a tab whose content is all short Text/Button views (no
+                // full-width TextField or Picker to stretch it) sizes to its own narrow
+                // intrinsic width inside the ScrollView and then sits centered in the
+                // leftover space — Monitoring and About looked "randomly centered"
+                // while General/Channels/Cookies/Notifications looked fine purely by
+                // accident, because something in each of those already happened to be
+                // wide enough to fill the row (user feedback, 03-10-2026).
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(20)
             }
 
