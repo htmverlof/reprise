@@ -401,10 +401,13 @@ struct SettingsView: View {
             // jump around as this block's content changes shape (no update → update
             // available → downloading) — user feedback, 02-10-2026, with screenshots
             // showing everything below sliding down a different amount per state.
-            // Sized for the tallest real combination (downloading progress + update
-            // banner + button row); the result-text rows reserve their line even when
-            // empty (opacity 0) rather than being added/removed, which is the other
-            // half of what was causing the jump.
+            // 150 (the first guess) wasn't quite enough: measured live across all
+            // three states on 03-10-2026 (triggered with a temporary dummy GitHub
+            // release), the downloading+banner combo sat 14pt taller than the other
+            // two, so Links/Troubleshooting still shifted down slightly. 165 covers
+            // the actual tallest state with a small margin. The result-text rows
+            // reserve their line even when empty (opacity 0) rather than being added
+            // and removed, which is the other half of what was causing the jump.
             VStack(alignment: .leading, spacing: 6) {
                 if let progress = engine.updateProgress {
                     VStack(alignment: .leading, spacing: 4) {
@@ -466,7 +469,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .opacity(updateCheckResult == nil ? 0 : 1)
             }
-            .frame(minHeight: 150, alignment: .top)
+            .frame(minHeight: 165, alignment: .top)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("Links")
