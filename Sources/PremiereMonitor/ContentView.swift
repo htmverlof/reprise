@@ -278,6 +278,17 @@ struct VideoRow: View {
         video.status == .downloadingLive || video.status == .downloadingVod
     }
 
+    // Flat gray the whole "waiting" stretch (which can be days) made it hard to tell
+    // whether anything was actually close to happening — user feedback, 03-10-2026.
+    // Active checking only starts checkLeadMinutes before the scheduled time (15 min
+    // by default), but this just nudges the row's color in the last hour so it reads
+    // as "getting close" well before that.
+    private var isSoon: Bool {
+        guard video.status == .waiting else { return false }
+        let secondsUntil = video.scheduledDate.timeIntervalSinceNow
+        return secondsUntil > 0 && secondsUntil <= 3600
+    }
+
     private var fileSizeText: String? {
         guard video.status == .done, let path = video.finalFilePath,
               let size = (try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? Int64 else {
@@ -317,7 +328,8 @@ struct VideoRow: View {
                     // SwiftUI's built-in relative style ticks down on its own — no timer needed.
                     Text("in \(video.scheduledDate, style: .relative)")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .fontWeight(isSoon ? .semibold : .regular)
+                        .foregroundStyle(isSoon ? AnyShapeStyle(Color.teal) : AnyShapeStyle(.tertiary))
                 }
                 if let lastChecked = video.lastChecked {
                     Text("Last checked \(lastChecked, style: .relative) ago")
@@ -386,7 +398,7 @@ struct VideoRow: View {
                 if video.status == .done {
                     Image(systemName: "checkmark.circle.fill")
                 }
-                Text(video.status.displayName)
+                Text(isSoon ? "Soon" : video.status.displayName)
             }
             .font(.caption)
             .padding(.horizontal, 8)
@@ -400,6 +412,7 @@ struct VideoRow: View {
     }
 
     private var statusColor: Color {
+        if isSoon { return .teal }
         switch video.status {
         case .waiting: return .gray
         case .downloadingLive: return .red
